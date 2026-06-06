@@ -1,0 +1,107 @@
+<idea-plugin>
+    <id>com.embedded.terminal</id>
+    <name>Embedded Terminal Emulator</name>
+    <vendor email="zballina@gmail.com" url="https://github.com/zballina/embedded-terminal-emulator">Francisco Ballina</vendor>
+
+    <description><![CDATA[
+    <h3>Embedded Terminal Emulator</h3>
+    <p>Embed a professional, fast, and fully integrated terminal experience inside PyCharm without resource overhead.</p>
+    
+    <h4>Key Features and Advantages over the Official JetBrains Terminal:</h4>
+    <ul>
+        <li><b>Ultra-Lightweight Swing Native Architecture:</b> Unlike the official terminal which uses a heavy web engine or complex HTML/JS layers that significantly increase RAM and CPU consumption, this plugin uses a pure Swing engine written in Kotlin with a hardware-accelerated glyph cache (image blitting), reducing memory consumption by 98% without additional processes.</li>
+        <li><b>Guaranteed Automatic Virtual Environment Activation:</b> Instant detection of Python environments (`.venv`, `venv`, `env`) linked to the project and injection into the PTY process's `PATH` when opening a tab. Avoids the usual problems and misconfigurations of the official terminal to activate environments transparently.</li>
+        <li><b>Full Shell Keyboard Shortcut Control (Ctrl+R, Ctrl+C, etc.):</b> Priority event interception that prevents the IDE from capturing critical shell shortcuts (such as history search with `Ctrl+R`, suspensions with `Ctrl+Z`, interrupts with `Ctrl+C`, or word navigation with `Opt/Ctrl + Arrows`), while maintaining accessibility of global ToolWindow shortcuts (`Cmd/Alt + 1..9`).</li>
+        <li><b>Protected Paste Mode (Bracketed Paste Mode - ANSI 2004):</b> Native support to prevent visual corruption, long line misalignment, and unintended execution of commands when pasting multiline text into the prompt.</li>
+        <li><b>Customizable Aesthetics:</b> Allows showing or hiding the vertical scrollbar from the plugin settings, adapting to minimalist or traditional interfaces.</li>
+        <li><b>Hot Font and Color Sync:</b> Real-time adaptation to code ligatures, console font sizes, and PyCharm theme palettes instantly and without restarting open tabs.</li>
+        <li><b>Multiple Tabs and Lazy Loading:</b> Native navigation and PTY resource loading deferred until the terminal tab becomes visible.</li>
+    </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <h4>What's new in version 1.20:</h4>
+    <ul>
+        <li><b>Configurable Scrollbar Visibility:</b> Added settings option to show or hide the vertical scrollbar, aligning with different layout preferences.</li>
+        <li><b>Mac Scroll/Rubber-Banding Fix:</b> Fixed trackpad overscroll and rubber-banding flickering in macOS/JBR by introducing a locked viewport position.</li>
+        <li><b>Clean Telemetry HUD:</b> Disabled debug/diagnostic telemetry overlay HUD by default for clean production builds.</li>
+        <li><b>Deprecation Warnings Resolve:</b> Fixed OLD_EDT thread deprecation warnings on tab actions to ensure compatibility with modern IntelliJ platform versions.</li>
+        <li><b>English Documentation:</b> Fully translated all user-facing plugin descriptions and release change-notes to English.</li>
+    </ul>
+
+    <h4>What's new in version 1.19:</h4>
+    <ul>
+        <li><b>Bracketed Paste Mode Support (ANSI 2004):</b> Implemented full support for ANSI mode `2004`. When pasting long or multiline text, the emulator now wraps the block with special escape sequences (`\u001b[200~` and `\u001b[201~`). This prevents the shell (like `zsh`/`bash`) from interpreting the block character-by-character too quickly, avoiding cursor/redraw desynchronization and resolving visual corruption and misalignment on long pasted lines.</li>
+    </ul>
+
+    <h4>What's new in version 1.18:</h4>
+    <ul>
+        <li><b>IDE Global Shortcut Interception (e.g., Ctrl + R):</b> Implemented a high-priority event dispatcher (`IdeEventQueue.EventDispatcher`) that captures and consumes global IDE keyboard shortcuts when the terminal emulator has focus. This prevents PyCharm from intercepting crucial shell combinations (like `Ctrl+R` for history search, `Ctrl+C`, `Ctrl+Z`, etc.). Essential shortcuts like toggling ToolWindows (`Cmd`/`Alt` + `1..9`) or modifiers alone are excluded to keep `Double Shift` functioning.</li>
+    </ul>
+
+    <h4>What's new in version 1.17:</h4>
+    <ul>
+        <li><b>Command Autocompletion with Tab Key Support:</b> Disabled Swing's default focus traversal keys interception for the terminal panel. This allows `Tab` and `Shift + Tab` keystrokes to be delivered directly to the terminal emulator instead of switching UI components in IntelliJ. Thus, native shell autocompletion (`zsh`/`bash`) and tab-dependent commands now work transparently and directly.</li>
+    </ul>
+
+    <h4>What's new in version 1.16:</h4>
+    <ul>
+        <li><b>Orphaned Characters Fix when Exiting Interactive Programs (Letter 'q' bug):</b> Added support for intermediate characters (range `0x20..0x2F`, like space) within CSI escape sequences. This fixes a bug where cursor style change commands (`DECSCUSR` sequence: `CSI Ps SP q`) broke halfway due to the intermediate space character, causing the trailing `q` to print as ordinary text when exiting `/help` or other interactive console utilities.</li>
+    </ul>
+
+    <h4>What's new in version 1.15:</h4>
+    <ul>
+        <li><b>Cursor Save and Restore Support (Save/Restore Cursor):</b> Added full support for ANSI cursor save and restore sequences (`ESC 7`/`ESC 8` and CSI `s`/`CSI u`). This fixes prompt misalignment, offset issues, and unwanted space insertions when navigating word-by-word (`opt + arrows` on macOS) or refreshing complex prompts in Zsh (e.g., with syntax-highlighting or autosuggestions plugins).</li>
+    </ul>
+
+    <h4>What's new in version 1.14:</h4>
+    <ul>
+        <li><b>Scrollback Margins Support (DECSTBM):</b> Implemented full support for CSI `r` sequence to define top and bottom scrolling margins. This fixes bugs in interactive carousel-like menus (where items rotate/slide in a screen sub-region while the rest remains fixed), respecting margins during line insertions and deletions (`IL`, `DL`) and line wraps.</li>
+    </ul>
+
+    <h4>What's new in version 1.13:</h4>
+    <ul>
+        <li><b>Terminal Font Proportion and Size Fix:</b> Bound automatic typography to PyCharm's specific console settings (`consoleFontName` and `consoleFontSize`), rather than editor font settings.</li>
+        <li><b>Compact and Precise Line Height:</b> Implemented a default line height of `1.0` for the terminal. This prevents excessive vertical spacing, letting the correct number of rows fit so interactive menus are not clipped and box-drawing characters join vertically without gaps.</li>
+    </ul>
+
+    <h4>What's new in version 1.12:</h4>
+    <ul>
+        <li><b>Vertical Resize Duplication Fix:</b> Implemented an adaptive resizing algorithm anchored to the bottom that preserves cursor position in the history buffer. This prevents duplication of interactive menus, banners, and prompts (like `agy` and `inquirer`) when dragging to change terminal height.</li>
+    </ul>
+
+    <h4>What's new in version 1.11:</h4>
+    <ul>
+        <li><b>Advanced Scroll and Line ANSI Support:</b> Added support for `ESC M` (Reverse Index) and CSI `E` (Cursor Next Line), `F` (Cursor Previous Line), `S` (Scroll Up), and `T` (Scroll Down) commands. This fixes line duplication issues in dynamic menus and interactive prompts (like `inquirer` and similar).</li>
+        <li><b>Advanced Text Deletion and Navigation Shortcuts:</b> Added system shortcuts for text deletion and navigation:
+            <ul>
+                <li>macOS: `Opt+Backspace` (delete previous word), `Cmd+Backspace` (delete entire line), `Opt+Arrows` (move word-by-word), `Cmd+Arrows` (move to start/end of line).</li>
+                <li>Windows/Linux: `Ctrl+Backspace` (delete previous word), `Alt+Backspace` (delete entire line), `Ctrl+Arrows` (move word-by-word), `Alt+Arrows` (move to start/end of line).</li>
+            </ul>
+        </li>
+        <li><b>Modifier Key Combinations:</b> Added full support for modifier key combinations (Shift, Alt, Ctrl) combined with navigation and editing keys (arrows, Home, End, PageUp, PageDown, Delete) in accordance with the standard xterm emulator (e.g. `Ctrl+Home` and `Ctrl+End`).</li>
+        <li><b>Advanced ANSI Support:</b> Added support for CSI DCH, ECH, ICH, IL, and DL commands. This fixes text overlapping and corruption in interactive tools like `agy` file lists and terminal editors.</li>
+        <li><b>Pure Swing Engine:</b> Complete migration from JCEF to native Swing, removing the embedded Chromium engine.</li>
+        <li><b>Lazy Loading:</b> System processes are launched only when the Tool Window becomes visible.</li>
+        <li><b>Autodetect Virtual Environment:</b> Automatic activation of Python virtual environments on shell startup.</li>
+        <li><b>History Limit:</b> Option added in settings to adjust lines in the scrollback buffer.</li>
+        <li><b>Login Shells:</b> Forced execution as a Login Shell on Unix/macOS to inherit system environment variables (PATH, aliases, etc.).</li>
+        <li><b>Keyboard Input Fixes:</b> Separated PTY read and write threads to prevent keyboard lockups. Removed Enter character duplication in `keyTyped`.</li>
+        <li><b>Sizing Safeguard:</b> Prevents shell lockups by avoiding sending microscopic window sizes (1x1) during startup.</li>
+    </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Embedded Terminal"
+                    anchor="bottom"
+                    factoryClass="com.embedded.terminal.EmbeddedTerminalToolWindowFactory"
+                    icon="AllIcons.Nodes.Console"/>
+        <applicationService serviceImplementation="com.embedded.terminal.EmbeddedTerminalSettings"/>
+        <applicationConfigurable parentId="tools"
+                                 instance="com.embedded.terminal.EmbeddedTerminalConfigurable"
+                                 id="com.embedded.terminal.EmbeddedTerminalConfigurable"
+                                 displayName="Embedded Terminal"/>
+    </extensions>
+</idea-plugin>

@@ -1,0 +1,17 @@
+.gradle
+build/
+out/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/dictionaries/
+.idea/libraries/
+*.iml
+.venv/
+venv/
+*.class
+*.log
+.DS_Store
+.intellijPlatform/
+.intellijPlatform
+.idea
