@@ -15,6 +15,7 @@ This plugin is designed as a direct and efficient replacement for integrated web
 5. **Bracketed Paste Mode Support (ANSI 2004)**: Securely wraps pasted text in special sequences to prevent the shell prompt from executing commands mid-line or causing visual layout corruption.
 6. **Stable Logical Scrolling**: Features a synchronized side scrollbar that can be shown or hidden through the plugin's configuration settings.
 7. **Lazy Resource Allocation**: Starts PTY processes and allocates OS threads only when the corresponding terminal tab actually becomes visible to the user.
+8. **Shift + Enter for Multiline Input**: Automatically translates `Shift + Enter` into the backslash + enter sequence (`\\\r`) to seamlessly write multiline prompts in CLI chat interfaces (like agy) and handle Zsh/Bash line continuations.
 
 ---
 

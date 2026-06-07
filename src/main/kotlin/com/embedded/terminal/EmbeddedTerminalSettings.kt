@@ -30,6 +30,13 @@ class EmbeddedTerminalSettings : PersistentStateComponent<EmbeddedTerminalSettin
         var autoCloseOnExit: Boolean = true
         var historyLimit: Int = 1000
         var showScrollBar: Boolean = true
+        var colorSchemeName: String = "Editor Theme"
+        var customForeground: String = "#F8F8F2"
+        var customBackground: String = "#282A36"
+        var customSelection: String = "#44475A"
+        var customCursor: String = "#F8F8F0"
+        var backgroundOpacity: Int = 100
+        var customAnsiColorsHex: String = "#21222C;#FF5555;#50FA7B;#F1FA8C;#BD93F9;#FF79C6;#8BE9FD;#F8F8F2;#6272A4;#FF6E6E;#69FF94;#FFFFA5;#D6ACFF;#FF92DF;#A4FFFF;#FFFFFF"
     }
 
     private var myState = State()

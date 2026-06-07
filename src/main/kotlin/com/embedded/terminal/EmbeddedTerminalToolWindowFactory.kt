@@ -226,6 +226,13 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
         }
         updateScrollBarVisibility()
 
+        // Apply initial opacity/transparency settings to containers
+        val isOpaque = settings.backgroundOpacity >= 100
+        terminalPanel.isOpaque = isOpaque
+        scrollPane.isOpaque = isOpaque
+        scrollPane.viewport.isOpaque = isOpaque
+        containerPanel.isOpaque = isOpaque
+
         // Direct key input piping to PTY
         terminalPanel.onInput = { input ->
             writeToPty(input)
@@ -282,6 +289,14 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
         buffer.updateHistoryLimit(currentSettings.historyLimit)
         com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
             updateScrollBarVisibility()
+
+            // Apply opacity/transparency settings to containers
+            val isOpaque = currentSettings.backgroundOpacity >= 100
+            terminalPanel.isOpaque = isOpaque
+            scrollPane.isOpaque = isOpaque
+            scrollPane.viewport.isOpaque = isOpaque
+            containerPanel.isOpaque = isOpaque
+
             terminalPanel.recalculateDimensions()
             terminalPanel.repaint()
         }

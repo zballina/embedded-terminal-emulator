@@ -375,22 +375,22 @@ class AnsiEscapeParser(
 
     private fun getAnsiColor(index: Int): Color {
         return when (index) {
-            0 -> Color(0, 0, 0) // Black
-            1 -> Color(205, 0, 0) // Red
-            2 -> Color(0, 205, 0) // Green
-            3 -> Color(205, 205, 0) // Yellow
-            4 -> Color(0, 0, 238) // Blue
-            5 -> Color(205, 0, 205) // Magenta
-            6 -> Color(0, 205, 205) // Cyan
-            7 -> Color(229, 229, 229) // White
-            8 -> Color(127, 127, 127) // Bright Black (Gray)
-            9 -> Color(255, 0, 0) // Bright Red
-            10 -> Color(0, 255, 0) // Bright Green
-            11 -> Color(255, 255, 0) // Bright Yellow
-            12 -> Color(92, 92, 255) // Bright Blue
-            13 -> Color(255, 0, 255) // Bright Magenta
-            14 -> Color(0, 255, 255) // Bright Cyan
-            15 -> Color(255, 255, 255) // Bright White
+            0 -> IndexedAnsiColor(0, 0, 0, 0) // Black
+            1 -> IndexedAnsiColor(1, 205, 0, 0) // Red
+            2 -> IndexedAnsiColor(2, 0, 205, 0) // Green
+            3 -> IndexedAnsiColor(3, 205, 205, 0) // Yellow
+            4 -> IndexedAnsiColor(4, 0, 0, 238) // Blue
+            5 -> IndexedAnsiColor(5, 205, 0, 205) // Magenta
+            6 -> IndexedAnsiColor(6, 0, 205, 205) // Cyan
+            7 -> IndexedAnsiColor(7, 229, 229, 229) // White
+            8 -> IndexedAnsiColor(8, 127, 127, 127) // Bright Black (Gray)
+            9 -> IndexedAnsiColor(9, 255, 0, 0) // Bright Red
+            10 -> IndexedAnsiColor(10, 0, 255, 0) // Bright Green
+            11 -> IndexedAnsiColor(11, 255, 255, 0) // Bright Yellow
+            12 -> IndexedAnsiColor(12, 92, 92, 255) // Bright Blue
+            13 -> IndexedAnsiColor(13, 255, 0, 255) // Bright Magenta
+            14 -> IndexedAnsiColor(14, 0, 255, 255) // Bright Cyan
+            15 -> IndexedAnsiColor(15, 255, 255, 255) // Bright White
             else -> Color.WHITE
         }
     }

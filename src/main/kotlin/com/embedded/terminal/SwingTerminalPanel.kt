@@ -46,16 +46,13 @@ class SwingTerminalPanel(
     private val renderScheduler = RenderScheduler {
         // Read dirty spans atomically, then trigger repaint — lock held only for this tiny window
         val spans: List<DirtySpan>
-        val historySize: Int
         val rows: Int
         synchronized(buffer) {
-            historySize = buffer.history.size
             rows = buffer.rows
             spans = buffer.dirtyTracker.getConsolidatedSpans()
             if (spans.isNotEmpty()) buffer.dirtyTracker.clear()
         }
         if (spans.isEmpty()) return@RenderScheduler
-        val viewStartLine = historySize - scrollOffset
         if (spans.size > 50) {
             repaint()
         } else {
@@ -187,9 +184,10 @@ class SwingTerminalPanel(
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
 
-        val scheme = EditorColorsManager.getInstance().globalScheme
-        val defaultBg = scheme.defaultBackground ?: if (com.intellij.util.ui.UIUtil.isUnderDarcula()) Color(23, 23, 23) else Color(255, 255, 255)
-        val defaultFg = scheme.defaultForeground ?: if (com.intellij.util.ui.UIUtil.isUnderDarcula()) Color(248, 248, 242) else Color(0, 0, 0)
+        val settings = EmbeddedTerminalSettings.getInstance().state
+        val activeColors = resolveActiveColors()
+        val defaultBg = activeColors.bg
+        val defaultFg = activeColors.fg
 
         // Setup font metrics (done before acquiring the lock — pure computation)
         val terminalFont = getTerminalFont()
@@ -236,9 +234,18 @@ class SwingTerminalPanel(
         }
         // ── End of synchronized region ───────────────────────────────────────────
 
-        // Fill background
-        g2.color = defaultBg
-        g2.fillRect(0, 0, width, height)
+        // Fill background with opacity support
+        val opacity = settings.backgroundOpacity / 100.0f
+        if (opacity < 1.0f) {
+            val oldComposite = g2.composite
+            g2.composite = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, opacity)
+            g2.color = defaultBg
+            g2.fillRect(0, 0, width, height)
+            g2.composite = oldComposite
+        } else {
+            g2.color = defaultBg
+            g2.fillRect(0, 0, width, height)
+        }
 
         // Draw cells from snapshot
         for (y in 0 until snapRows) {
@@ -254,7 +261,7 @@ class SwingTerminalPanel(
                 val cellW = charWidth * (if (cell.width == CellWidth.DOUBLE) 2 else 1)
 
                 // 1. Draw cell background if custom
-                val bg = cell.bgColor ?: defaultBg
+                val bg = resolveCellColor(cell.bgColor, defaultBg, activeColors.ansi)
                 if (bg != defaultBg) {
                     g2.color = bg
                     g2.fillRect(cellX, cellY, cellW, rowHeight)
@@ -263,7 +270,7 @@ class SwingTerminalPanel(
                 // 2. Selection overlay
                 val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - scrollOffset
                 if (isCellSelected(x, snapViewStartLine + y)) {
-                    g2.color = Color(60, 120, 220, 100)
+                    g2.color = activeColors.sel
                     g2.fillRect(cellX, cellY, cellW, rowHeight)
                 }
 
@@ -273,7 +280,8 @@ class SwingTerminalPanel(
                     if (cell.isBold) style = style or Font.BOLD
                     if (cell.isItalic) style = style or Font.ITALIC
 
-                    val key = GlyphKey(cell.grapheme, style, cell.fgColor ?: defaultFg)
+                    val fg = resolveCellColor(cell.fgColor, defaultFg, activeColors.ansi)
+                    val key = GlyphKey(cell.grapheme, style, fg)
                     val loc = glyphAtlas.getGlyph(key, terminalFont, charWidth, rowHeight, charAscent, fm)
 
                     g2.drawImage(
@@ -285,7 +293,7 @@ class SwingTerminalPanel(
 
                     if (cell.isUnderline) {
                         g2.stroke = BasicStroke(1f)
-                        g2.color = cell.fgColor ?: defaultFg
+                        g2.color = fg
                         g2.drawLine(cellX, cellY + rowHeight - 2, cellX + cellW, cellY + rowHeight - 2)
                     }
                 }
@@ -302,7 +310,7 @@ class SwingTerminalPanel(
                 val cursorXPos = padding + snapCursorX * charWidth
                 val cursorYPos = padding + cursorViewY * rowHeight
 
-                g2.color = if (defaultBg.red + defaultBg.green + defaultBg.blue < 380) Color.WHITE else Color.BLACK
+                g2.color = activeColors.cur
 
                 if (hasFocus()) {
                     if (cursorBlinkState) {
@@ -585,7 +593,7 @@ class SwingTerminalPanel(
                 KeyEvent.VK_PAGE_UP -> "\u001b[5;${modifierNum}~"
                 KeyEvent.VK_PAGE_DOWN -> "\u001b[6;${modifierNum}~"
                 KeyEvent.VK_DELETE -> "\u001b[3;${modifierNum}~"
-                KeyEvent.VK_ENTER -> "\r"
+                KeyEvent.VK_ENTER -> if (e.isShiftDown && !e.isControlDown && !e.isAltDown) "\\\r" else "\r"
                 KeyEvent.VK_BACK_SPACE -> "\u007f"
                 KeyEvent.VK_TAB -> "\u001b[Z"
                 KeyEvent.VK_ESCAPE -> "\u001b"
@@ -781,4 +789,111 @@ class SwingTerminalPanel(
     override fun getPreferredSize(): Dimension {
         return Dimension(600, 400)
     }
+
+    private fun resolveActiveColors(): ActiveColors {
+        val settings = EmbeddedTerminalSettings.getInstance().state
+        val schemeName = settings.colorSchemeName
+
+        val defaultBg: Color
+        val defaultFg: Color
+        val selectionColor: Color
+        val cursorColor: Color
+        val ansiColors: List<Color>
+
+        when (schemeName) {
+            "Editor Theme" -> {
+                val scheme = EditorColorsManager.getInstance().globalScheme
+                defaultBg = scheme.defaultBackground ?: (if (com.intellij.util.ui.UIUtil.isUnderDarcula()) Color(23, 23, 23) else Color(255, 255, 255))
+                defaultFg = scheme.defaultForeground ?: (if (com.intellij.util.ui.UIUtil.isUnderDarcula()) Color(248, 248, 242) else Color(0, 0, 0))
+                selectionColor = Color(60, 120, 220, 100)
+                cursorColor = if (defaultBg.red + defaultBg.green + defaultBg.blue < 380) Color.WHITE else Color.BLACK
+
+                ansiColors = (0..15).map { idx ->
+                    getEditorAnsiColor(idx, scheme)
+                }
+            }
+            "Custom" -> {
+                defaultBg = TerminalColorScheme.parseHexColor(settings.customBackground)
+                defaultFg = TerminalColorScheme.parseHexColor(settings.customForeground)
+                selectionColor = TerminalColorScheme.parseHexColor(settings.customSelection)
+                cursorColor = TerminalColorScheme.parseHexColor(settings.customCursor)
+                ansiColors = settings.customAnsiColorsHex.split(";").map { TerminalColorScheme.parseHexColor(it) }
+            }
+            else -> {
+                val preset = TerminalColorScheme.findByName(schemeName) ?: TerminalColorScheme.Dracula
+                defaultBg = preset.backgroundColor
+                defaultFg = preset.foregroundColor
+                selectionColor = preset.selectionColor
+                cursorColor = preset.cursorColor
+                ansiColors = preset.ansiColors
+            }
+        }
+
+        return ActiveColors(defaultBg, defaultFg, selectionColor, cursorColor, ansiColors)
+    }
+
+    private fun resolveCellColor(cellColor: Color?, defaultColor: Color, ansiColors: List<Color>): Color {
+        if (cellColor == null) return defaultColor
+        if (cellColor is IndexedAnsiColor) {
+            val idx = cellColor.index
+            if (idx in 0 until ansiColors.size) {
+                return ansiColors[idx]
+            }
+        }
+        return cellColor
+    }
+
+    private fun getEditorAnsiColor(index: Int, scheme: com.intellij.openapi.editor.colors.EditorColorsScheme): Color {
+        val key = when (index) {
+            0 -> com.intellij.execution.process.ConsoleHighlighter.BLACK
+            1 -> com.intellij.execution.process.ConsoleHighlighter.RED
+            2 -> com.intellij.execution.process.ConsoleHighlighter.GREEN
+            3 -> com.intellij.execution.process.ConsoleHighlighter.YELLOW
+            4 -> com.intellij.execution.process.ConsoleHighlighter.BLUE
+            5 -> com.intellij.execution.process.ConsoleHighlighter.MAGENTA
+            6 -> com.intellij.execution.process.ConsoleHighlighter.CYAN
+            7 -> com.intellij.execution.process.ConsoleHighlighter.GRAY
+            8 -> com.intellij.execution.process.ConsoleHighlighter.DARKGRAY
+            9 -> com.intellij.execution.process.ConsoleHighlighter.RED_BRIGHT
+            10 -> com.intellij.execution.process.ConsoleHighlighter.GREEN_BRIGHT
+            11 -> com.intellij.execution.process.ConsoleHighlighter.YELLOW_BRIGHT
+            12 -> com.intellij.execution.process.ConsoleHighlighter.BLUE_BRIGHT
+            13 -> com.intellij.execution.process.ConsoleHighlighter.MAGENTA_BRIGHT
+            14 -> com.intellij.execution.process.ConsoleHighlighter.CYAN_BRIGHT
+            15 -> com.intellij.execution.process.ConsoleHighlighter.WHITE
+            else -> null
+        }
+        val attr = if (key != null) scheme.getAttributes(key) else null
+        return attr?.foregroundColor ?: getDefaultAnsiColor(index)
+    }
+
+    private fun getDefaultAnsiColor(index: Int): Color {
+        return when (index) {
+            0 -> Color(0, 0, 0)
+            1 -> Color(205, 0, 0)
+            2 -> Color(0, 205, 0)
+            3 -> Color(205, 205, 0)
+            4 -> Color(0, 0, 238)
+            5 -> Color(205, 0, 205)
+            6 -> Color(0, 205, 205)
+            7 -> Color(229, 229, 229)
+            8 -> Color(127, 127, 127)
+            9 -> Color(255, 0, 0)
+            10 -> Color(0, 255, 0)
+            11 -> Color(255, 255, 0)
+            12 -> Color(92, 92, 255)
+            13 -> Color(255, 0, 255)
+            14 -> Color(0, 255, 255)
+            15 -> Color(255, 255, 255)
+            else -> Color.WHITE
+        }
+    }
+
+    private data class ActiveColors(
+        val bg: Color,
+        val fg: Color,
+        val sel: Color,
+        val cur: Color,
+        val ansi: List<Color>
+    )
 }

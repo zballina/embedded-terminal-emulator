@@ -20,7 +20,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
-    <h4>What's new in version 1.20:</h4>
+    <h4>What's new in version 1.22.0:</h4>
+    <ul>
+        <li><b>Color & Theme Customization:</b> Added settings interface with preset themes (Dracula, Solarized Dark/Light, Monokai, One Dark, Konsole Default), fully custom scheme creation, and a compact 2x8 grid picker for the 16 ANSI colors.</li>
+        <li><b>Background Opacity (Konsole Style):</b> Added a background transparency slider (0-100%) that dynamically adjusts the terminal background opacity over the IDE tool window background while keeping text, selections, and cursors fully opaque and readable.</li>
+        <li><b>Shift + Enter Shortcut:</b> Map Shift + Enter to backslash + enter (<code>\\\r</code>) to facilitate multiline text editing and newlines in CLI chat agents (like agy) and shell line continuations.</li>
+    </ul>
+
+    <h4>What's new in version 1.20.0:</h4>
     <ul>
         <li><b>Configurable Scrollbar Visibility:</b> Added settings option to show or hide the vertical scrollbar, aligning with different layout preferences.</li>
         <li><b>Mac Scroll/Rubber-Banding Fix:</b> Fixed trackpad overscroll and rubber-banding flickering in macOS/JBR by introducing a locked viewport position.</li>
