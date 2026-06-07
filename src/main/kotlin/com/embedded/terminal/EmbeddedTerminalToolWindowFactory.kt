@@ -25,8 +25,10 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.roots.ProjectRootManager
 import kotlin.jvm.Volatile
 
+private val CONTROLLER_KEY = com.intellij.openapi.util.Key.create<EmbeddedTerminalController>("EmbeddedTerminalController")
 
 class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -39,7 +41,7 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         // Action to add new tabs
-        val addTabAction = object : AnAction("Nueva pestaña", "Abre una nueva sesión de terminal", AllIcons.General.Add) {
+        val addTabAction = object : AnAction(TerminalBundle.message("new.tab"), TerminalBundle.message("new.tab.desc"), AllIcons.General.Add) {
             override fun actionPerformed(e: AnActionEvent) {
                 val nextTabIndex = toolWindow.contentManager.contentCount + 1
                 addNewTerminalTab(project, toolWindow, "Terminal $nextTabIndex")
@@ -51,7 +53,7 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         // Action to close active tab
-        val closeTabAction = object : AnAction("Cerrar pestaña", "Cierra la pestaña de terminal activa", AllIcons.Actions.Cancel) {
+        val closeTabAction = object : AnAction(TerminalBundle.message("close.tab"), TerminalBundle.message("close.tab.desc"), AllIcons.Actions.Cancel) {
             override fun actionPerformed(e: AnActionEvent) {
                 val selectedContent = toolWindow.contentManager.selectedContent
                 if (selectedContent != null) {
@@ -74,6 +76,22 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
             override fun contentRemoved(event: ContentManagerEvent) {
                 if (toolWindow.contentManager.contentCount == 0) {
                     toolWindow.hide(null)
+                }
+            }
+
+            override fun contentRemoveQuery(event: ContentManagerEvent) {
+                val content = event.content
+                val controller = content.getUserData(CONTROLLER_KEY)
+                if (controller != null && controller.isProcessRunning()) {
+                    val result = com.intellij.openapi.ui.Messages.showYesNoDialog(
+                        project,
+                        TerminalBundle.message("close.confirm.msg"),
+                        TerminalBundle.message("close.confirm.title"),
+                        com.intellij.openapi.ui.Messages.getQuestionIcon()
+                    )
+                    if (result != com.intellij.openapi.ui.Messages.YES) {
+                        event.consume()
+                    }
                 }
             }
         })
@@ -104,6 +122,7 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
         val content = contentFactory.createContent(controller.containerPanel, title, false)
         content.isCloseable = true
         content.setDisposer(controller) // Dispose the controller when tab is closed
+        content.putUserData(CONTROLLER_KEY, controller)
         
         controller.onProcessExit = {
             com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
@@ -152,6 +171,7 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
     private val writeExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var isDisposed = false
     var onProcessExit: (() -> Unit)? = null
+    private val tempFilesToDelete = java.util.Collections.synchronizedList(mutableListOf<java.io.File>())
 
     @Volatile
     private var targetCols = 80
@@ -322,34 +342,189 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
             env["TERM"] = "xterm-256color"
 
             // Auto-activate python virtual environment if present
+            var detectedVenv: java.io.File? = null
+            var detectedBinDir: java.io.File? = null
+            val isWin = os.contains("win")
+
+            // 1. Try local project venv candidates
             val baseDir = project.basePath
             if (baseDir != null) {
                 val venvCandidates = listOf(".venv", "venv", "env")
-                var detectedVenv: java.io.File? = null
                 for (cand in venvCandidates) {
                     val f = java.io.File(baseDir, cand)
                     if (f.exists() && f.isDirectory) {
-                        detectedVenv = f
-                        break
+                        val binDir = if (isWin) java.io.File(f, "Scripts") else java.io.File(f, "bin")
+                        if (binDir.exists() && binDir.isDirectory) {
+                            detectedVenv = f
+                            detectedBinDir = binDir
+                            break
+                        }
                     }
                 }
-                if (detectedVenv != null) {
-                    val venvPath = detectedVenv.absolutePath
-                    val isWin = os.contains("win")
-                    val binDir = if (isWin) java.io.File(detectedVenv, "Scripts") else java.io.File(detectedVenv, "bin")
-                    if (binDir.exists() && binDir.isDirectory) {
-                        val binPath = binDir.absolutePath
-                        val oldPath = env["PATH"] ?: System.getenv("PATH") ?: ""
-                        val pathSeparator = if (isWin) ";" else ":"
-                        env["PATH"] = if (oldPath.isNotEmpty()) "$binPath$pathSeparator$oldPath" else binPath
-                        env["VIRTUAL_ENV"] = venvPath
-                        env.remove("PYTHONHOME")
+            }
+
+            // 2. Try configured Project SDK if local candidates not found
+            if (detectedVenv == null) {
+                try {
+                    val sdk = ProjectRootManager.getInstance(project).projectSdk
+                    val homePath = sdk?.homePath
+                    if (homePath != null) {
+                        val exeFile = java.io.File(homePath)
+                        if (exeFile.exists()) {
+                            val binDir = exeFile.parentFile
+                            if (binDir != null && binDir.exists() && binDir.isDirectory) {
+                                val activateFile = if (isWin) java.io.File(binDir, "activate.bat") else java.io.File(binDir, "activate")
+                                val venvDir = binDir.parentFile
+                                val pyvenvCfg = if (venvDir != null) java.io.File(venvDir, "pyvenv.cfg") else null
+                                if (activateFile.exists() || (pyvenvCfg != null && pyvenvCfg.exists())) {
+                                    detectedVenv = venvDir
+                                    detectedBinDir = binDir
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Throwable) {
+                    // Ignore class loading or other SDK access errors
+                }
+            }
+
+            if (detectedVenv != null && detectedBinDir != null) {
+                val venvPath = detectedVenv.absolutePath
+                val binPath = detectedBinDir.absolutePath
+                val oldPath = env["PATH"] ?: System.getenv("PATH") ?: ""
+                val pathSeparator = if (isWin) ";" else ":"
+                env["PATH"] = if (oldPath.isNotEmpty()) "$binPath$pathSeparator$oldPath" else binPath
+                env["VIRTUAL_ENV"] = venvPath
+                env.remove("PYTHONHOME")
+            }
+
+            var activatedSilently = false
+            var finalCmd = cmd
+            val shellPath = cmd.firstOrNull() ?: ""
+            val shellLower = shellPath.lowercase()
+            
+            if (isWin) {
+                if (detectedVenv != null && detectedBinDir != null) {
+                    if (shellLower.contains("powershell") || shellLower.contains("pwsh")) {
+                        val psScript = java.io.File(detectedBinDir, "Activate.ps1")
+                        if (psScript.exists()) {
+                            finalCmd = arrayOf(shellPath, "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "& \"${psScript.absolutePath}\"")
+                            activatedSilently = true
+                        }
+                    } else if (shellLower.contains("cmd")) {
+                        val batScript = java.io.File(detectedBinDir, "activate.bat")
+                        if (batScript.exists()) {
+                            finalCmd = arrayOf(shellPath, "/K", batScript.absolutePath)
+                            activatedSilently = true
+                        }
+                    }
+                }
+            } else {
+                // Unix shells
+                if (shellLower.contains("zsh")) {
+                    try {
+                        val tempDir = java.nio.file.Files.createTempDirectory("terminal-zsh-").toFile()
+                        tempFilesToDelete.add(tempDir)
+                        val zshrcFile = java.io.File(tempDir, ".zshrc")
+                        val originalZdotdir = System.getenv("ZDOTDIR") ?: System.getProperty("user.home")
+                        val sb = java.lang.StringBuilder()
+                        sb.append("""
+                        if [ -f "$originalZdotdir/.zshrc" ]; then
+                            source "$originalZdotdir/.zshrc"
+                        fi
+                        
+                        # Gentoo-style terminal coloring and alias configuration
+                        export CLICOLOR=1
+                        export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                        if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                            alias ls='ls -G'
+                        else
+                            alias ls='ls --color=auto'
+                        fi
+                        alias grep='grep --color=auto'
+                        alias diff='diff --color=auto'
+                        PROMPT="%F{green}%n%f@%F{green}%m%f %F{blue}%~%f %# "
+                        """.trimIndent())
+                        
+                        if (detectedBinDir != null) {
+                            val shScript = java.io.File(detectedBinDir, "activate")
+                            if (shScript.exists()) {
+                                sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
+                            }
+                        }
+                        
+                        zshrcFile.writeText(sb.toString())
+                        tempFilesToDelete.add(zshrcFile)
+                        env["ZDOTDIR"] = tempDir.absolutePath
+                        activatedSilently = true
+                    } catch (e: Exception) {
+                        // Fallback
+                    }
+                } else if (shellLower.contains("bash")) {
+                    try {
+                        val tempFile = java.io.File.createTempFile("terminal-bashrc-", ".sh")
+                        tempFilesToDelete.add(tempFile)
+                        val sb = java.lang.StringBuilder()
+                        sb.append("""
+                        if [ -f ~/.bashrc ]; then
+                            source ~/.bashrc
+                        fi
+
+                        # Gentoo-style terminal coloring and alias configuration
+                        export CLICOLOR=1
+                        export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                        if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                            alias ls='ls -G'
+                        else
+                            alias ls='ls --color=auto'
+                        fi
+                        alias grep='grep --color=auto'
+                        alias diff='diff --color=auto'
+                        PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "
+                        """.trimIndent())
+                        
+                        if (detectedBinDir != null) {
+                            val shScript = java.io.File(detectedBinDir, "activate")
+                            if (shScript.exists()) {
+                                sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
+                            }
+                        }
+                        
+                        tempFile.writeText(sb.toString())
+                        finalCmd = arrayOf(shellPath, "--rcfile", tempFile.absolutePath, "-i")
+                        activatedSilently = true
+                    } catch (e: Exception) {
+                        // Fallback
+                    }
+                } else if (shellLower.contains("fish")) {
+                    if (detectedBinDir != null) {
+                        val fishScript = java.io.File(detectedBinDir, "activate.fish")
+                        if (fishScript.exists()) {
+                            finalCmd = arrayOf(shellPath, "-C", "source \"${fishScript.absolutePath}\"")
+                            activatedSilently = true
+                        }
                     }
                 }
             }
 
             val workingDir = project.basePath ?: System.getProperty("user.home")
-            ptyProcess = PtyProcess.exec(cmd, env, workingDir)
+            ptyProcess = PtyProcess.exec(finalCmd, env, workingDir)
+
+            // Send activation command to the shell as fallback if silent activation was not supported
+            if (detectedVenv != null && detectedBinDir != null && !activatedSilently) {
+                val activeShellPath = finalCmd.firstOrNull() ?: ""
+                executor.submit {
+                    try {
+                        Thread.sleep(600) // Wait a brief moment for the shell to print its prompt and be ready
+                        val activationCmd = getActivationCommand(detectedBinDir, activeShellPath, os)
+                        if (activationCmd != null) {
+                            writeToPty(activationCmd)
+                        }
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                }
+            }
             
             // Set initial win size target using current buffer dimensions if not set by onResize yet
             if (targetCols == 80 && targetRows == 24 && (buffer.cols != 80 || buffer.rows != 24)) {
@@ -408,6 +583,72 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
         }
     }
 
+    private fun getActivationCommand(binDir: java.io.File, shellPath: String, os: String): String? {
+        val shellLower = shellPath.lowercase()
+        val isWin = os.contains("win")
+        
+        return if (isWin) {
+            if (shellLower.contains("powershell") || shellLower.contains("pwsh")) {
+                val psScript = java.io.File(binDir, "Activate.ps1")
+                if (psScript.exists()) "& \"${psScript.absolutePath}\"\r\n" else null
+            } else {
+                val batScript = java.io.File(binDir, "activate.bat")
+                if (batScript.exists()) "\"${batScript.absolutePath}\"\r\n" else null
+            }
+        } else {
+            if (shellLower.contains("fish")) {
+                val fishScript = java.io.File(binDir, "activate.fish")
+                if (fishScript.exists()) "source \"${fishScript.absolutePath}\"\n" else null
+            } else if (shellLower.contains("csh") || shellLower.contains("tcsh")) {
+                val cshScript = java.io.File(binDir, "activate.csh")
+                if (cshScript.exists()) "source \"${cshScript.absolutePath}\"\n" else null
+            } else {
+                val shScript = java.io.File(binDir, "activate")
+                if (shScript.exists()) "source \"${shScript.absolutePath}\"\n" else null
+            }
+        }
+    }
+
+    fun isProcessRunning(): Boolean {
+        val pty = ptyProcess ?: return false
+        if (!pty.isAlive) return false
+        return try {
+            val handle = ProcessHandle.of(pty.pid()).orElse(null) ?: return false
+            val descendants = handle.descendants().toList()
+
+            fun isIgnoreProcess(cmd: String): Boolean {
+                val name = cmd.substringAfterLast('/').substringAfterLast('\\').lowercase()
+                return name == "zsh" || 
+                       name == "bash" || 
+                       name == "sh" || 
+                       name == "fish" || 
+                       name == "powershell" || 
+                       name == "pwsh" || 
+                       name == "cmd" || 
+                       name == "cmd.exe" ||
+                       name == "login" || 
+                       name == "conhost" || 
+                       name == "conhost.exe" || 
+                       name == "winpty-agent" || 
+                       name == "winpty-agent.exe" || 
+                       name == "fsnotifier" || 
+                       name == "reptyr" || 
+                       name == "ptyhelper"
+            }
+
+            descendants.any { descendant ->
+                val cmdPath = descendant.info().command().orElse("")
+                if (cmdPath.isEmpty()) {
+                    false
+                } else {
+                    !isIgnoreProcess(cmdPath)
+                }
+            }
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
     override fun dispose() {
         isDisposed = true
         stateEngine.shutdown()
@@ -419,5 +660,17 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
         try {
             ptyProcess?.destroy()
         } catch (e: Exception) {}
+        synchronized(tempFilesToDelete) {
+            for (f in tempFilesToDelete) {
+                try {
+                    if (f.isDirectory) {
+                        f.deleteRecursively()
+                    } else {
+                        f.delete()
+                    }
+                } catch (e: Exception) {}
+            }
+            tempFilesToDelete.clear()
+        }
     }
 }

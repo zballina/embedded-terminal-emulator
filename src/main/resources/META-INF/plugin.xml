@@ -20,6 +20,14 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h4>What's new in version 1.24.0:</h4>
+    <ul>
+        <li><b>Silent Virtual Environment Auto-Activation:</b> Automatically detect and activate Python virtual environments (venv, .venv, env) on startup without printing commands to the shell (using temporary ZDOTDIR profiles for zsh, --rcfile for bash, and -C for fish).</li>
+        <li><b>Gentoo-Style Terminal Colors:</b> Classic Gentoo-style terminal colors, LSColors, and command aliases (like ls, grep, diff) automatically configured for all zsh and bash terminal sessions.</li>
+        <li><b>Close Tab Active Process Protection:</b> Prevent closing terminal tabs if background processes are executing, displaying a confirmation warning and abruptly terminating running process trees if accepted. Optimized to check descendants robustly using OS-level process handles.</li>
+        <li><b>Dynamic Localized Interface:</b> Automatically translate plugin settings, options, and actions between English and Spanish depending on the system's JVM locale.</li>
+    </ul>
+
     <h4>What's new in version 1.22.0:</h4>
     <ul>
         <li><b>Color & Theme Customization:</b> Added settings interface with preset themes (Dracula, Solarized Dark/Light, Monokai, One Dark, Konsole Default), fully custom scheme creation, and a compact 2x8 grid picker for the 16 ANSI colors.</li>

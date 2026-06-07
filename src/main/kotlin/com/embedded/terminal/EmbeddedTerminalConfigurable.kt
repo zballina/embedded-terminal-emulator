@@ -100,7 +100,7 @@ class EmbeddedTerminalConfigurable : Configurable {
 class EmbeddedTerminalSettingsComponent {
     val panel: JPanel
     private val shellPathField = JTextField()
-    private val useEditorThemeCheckbox = JCheckBox("Sincronizar fuente con el editor")
+    private val useEditorThemeCheckbox = JCheckBox(TerminalBundle.message("sync.font"))
     private val customFontFamilyField = ComboBox<String>().apply {
         val fonts = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames
         fonts.forEach { addItem(it) }
@@ -108,10 +108,10 @@ class EmbeddedTerminalSettingsComponent {
     }
     private val customFontSizeField = JTextField()
     private val customLineHeightField = JTextField()
-    private val enableLigaturesCheckbox = JCheckBox("Habilitar ligaduras tipográficas (si están disponibles)")
-    private val autoCloseOnExitCheckbox = JCheckBox("Cerrar pestaña automáticamente al salir del proceso del shell")
+    private val enableLigaturesCheckbox = JCheckBox(TerminalBundle.message("enable.ligatures"))
+    private val autoCloseOnExitCheckbox = JCheckBox(TerminalBundle.message("auto.close"))
     private val historyLimitField = JTextField()
-    private val showScrollBarCheckbox = JCheckBox("Mostrar barra de desplazamiento (Scrollbar)")
+    private val showScrollBarCheckbox = JCheckBox(TerminalBundle.message("show.scrollbar"))
 
     // Color UI Elements
     private val colorSchemeComboBox = ComboBox<String>().apply {
@@ -250,22 +250,22 @@ class EmbeddedTerminalSettingsComponent {
             c.insets = JBUI.insets(4)
 
             c.gridx = 0; c.gridy = 0
-            add(JLabel("Texto (Foreground):"), c)
+            add(JLabel(TerminalBundle.message("foreground")), c)
             c.gridx = 1
             add(foregroundColorPanel, c)
 
             c.gridx = 0; c.gridy = 1
-            add(JLabel("Fondo (Background):"), c)
+            add(JLabel(TerminalBundle.message("background")), c)
             c.gridx = 1
             add(backgroundColorPanel, c)
 
             c.gridx = 2; c.gridy = 0
-            add(JLabel("Selección (Selection):"), c)
+            add(JLabel(TerminalBundle.message("selection")), c)
             c.gridx = 3
             add(selectionColorPanel, c)
 
             c.gridx = 2; c.gridy = 1
-            add(JLabel("Cursor:"), c)
+            add(JLabel(TerminalBundle.message("cursor")), c)
             c.gridx = 3
             add(cursorColorPanel, c)
         }
@@ -281,20 +281,20 @@ class EmbeddedTerminalSettingsComponent {
         }
 
         panel = FormBuilder.createFormBuilder()
-            .addLabeledComponent("Ruta del Shell (dejar vacío para usar el predeterminado):", shellPathField, 1, false)
+            .addLabeledComponent(TerminalBundle.message("shell.path"), shellPathField, 1, false)
             .addComponent(useEditorThemeCheckbox, 1)
-            .addLabeledComponent("Tipografía personalizada (ej. JetBrains Mono, Fira Code):", customFontFamilyField, 1, false)
-            .addLabeledComponent("Tamaño de fuente personalizado:", customFontSizeField, 1, false)
-            .addLabeledComponent("Altura de línea personalizada (ej. 1.0):", customLineHeightField, 1, false)
+            .addLabeledComponent(TerminalBundle.message("custom.font"), customFontFamilyField, 1, false)
+            .addLabeledComponent(TerminalBundle.message("font.size"), customFontSizeField, 1, false)
+            .addLabeledComponent(TerminalBundle.message("line.height"), customLineHeightField, 1, false)
             .addComponent(enableLigaturesCheckbox, 1)
             .addComponent(autoCloseOnExitCheckbox, 1)
-            .addLabeledComponent("Límite de historial de líneas (ej. 1000):", historyLimitField, 1, false)
+            .addLabeledComponent(TerminalBundle.message("history.limit"), historyLimitField, 1, false)
             .addComponent(showScrollBarCheckbox, 1)
             .addSeparator(8)
-            .addLabeledComponent("Esquema de Colores:", colorSchemeComboBox, 1, false)
+            .addLabeledComponent(TerminalBundle.message("color.scheme"), colorSchemeComboBox, 1, false)
             .addComponent(customColorsPanel, 4)
-            .addLabeledComponent("Opacidad del fondo (Konsole style):", opacityPanel, 4, false)
-            .addLabeledComponent("Paleta ANSI de 16 colores (Custom):", ansiGrid, 6, false)
+            .addLabeledComponent(TerminalBundle.message("bg.opacity"), opacityPanel, 4, false)
+            .addLabeledComponent(TerminalBundle.message( "ansi.palette"), ansiGrid, 6, false)
             .addComponentFillVertically(JPanel(), 0)
             .panel
             
