@@ -10,6 +10,7 @@
     <h4>Key Features and Advantages over the Official JetBrains Terminal:</h4>
     <ul>
         <li><b>Ultra-Lightweight Swing Native Architecture:</b> Unlike the official terminal which uses a heavy web engine or complex HTML/JS layers that significantly increase RAM and CPU consumption, this plugin uses a pure Swing engine written in Kotlin with a hardware-accelerated glyph cache (image blitting), reducing memory consumption by 98% without additional processes.</li>
+        <li><b>Smart Paste & Drag and Drop for Agents (PNG, PDF, Text Logs):</b> Copy screenshots (images), documents (PDFs), or massive text files and paste them directly into the terminal with <code>Cmd+Shift+V</code> (or Drag & Drop). Handles file generation, folder isolation, and dynamic physical/symbolic links for heavy resources. Clickable paths open directly in the editor.</li>
         <li><b>Guaranteed Automatic Virtual Environment Activation:</b> Instant detection of Python environments (`.venv`, `venv`, `env`) linked to the project and injection into the PTY process's `PATH` when opening a tab. Avoids the usual problems and misconfigurations of the official terminal to activate environments transparently.</li>
         <li><b>Full Shell Keyboard Shortcut Control (Ctrl+R, Ctrl+C, etc.):</b> Priority event interception that prevents the IDE from capturing critical shell shortcuts (such as history search with `Ctrl+R`, suspensions with `Ctrl+Z`, interrupts with `Ctrl+C`, or word navigation with `Opt/Ctrl + Arrows`), while maintaining accessibility of global ToolWindow shortcuts (`Cmd/Alt + 1..9`).</li>
         <li><b>Protected Paste Mode (Bracketed Paste Mode - ANSI 2004):</b> Native support to prevent visual corruption, long line misalignment, and unintended execution of commands when pasting multiline text into the prompt.</li>
@@ -18,8 +19,16 @@
         <li><b>Multiple Tabs and Lazy Loading:</b> Native navigation and PTY resource loading deferred until the terminal tab becomes visible.</li>
     </ul>
     ]]></description>
+ 
+     <change-notes><![CDATA[
+    <h4>What's new in version 1.26.0:</h4>
+    <ul>
+        <li><b>Smart Paste & Drag and Drop:</b> Copy screenshots (images), documents (PDFs), or massive text logs and paste them directly into the terminal with <code>Cmd+Shift+V</code> (or Drag & Drop). Handles automatic file generation, isolated session directories, and dynamic physical/symbolic links for heavy resources.</li>
+        <li><b>Clickable Hyperlinks:</b> Injected temporary files are displayed as active terminal hyperlinks (underlined and highlighted) that instantly open in the PyCharm editor on mouse click.</li>
+        <li><b>Minimum Linking Configuration:</b> Added a setting under tools configuration (default 50MB) to choose when to switch from copying to hardlinks/symlinks for pasted resources.</li>
+        <li><b>Default Right-Top Alignment:</b> Positioned the tool window by default to the upper-right sidebar for fresh installations.</li>
+    </ul>
 
-    <change-notes><![CDATA[
     <h4>What's new in version 1.24.0:</h4>
     <ul>
         <li><b>Silent Virtual Environment Auto-Activation:</b> Automatically detect and activate Python virtual environments (venv, .venv, env) on startup without printing commands to the shell (using temporary ZDOTDIR profiles for zsh, --rcfile for bash, and -C for fish).</li>
@@ -110,7 +119,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Embedded Terminal"
-                    anchor="bottom"
+                    anchor="right"
+                    secondary="true"
                     factoryClass="com.embedded.terminal.EmbeddedTerminalToolWindowFactory"
                     icon="AllIcons.Nodes.Console"/>
         <applicationService serviceImplementation="com.embedded.terminal.EmbeddedTerminalSettings"/>

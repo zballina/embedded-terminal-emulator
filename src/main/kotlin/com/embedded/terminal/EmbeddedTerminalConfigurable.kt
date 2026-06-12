@@ -38,7 +38,8 @@ class EmbeddedTerminalConfigurable : Configurable {
                 component.customSelectionVal != settings.customSelection ||
                 component.customCursorVal != settings.customCursor ||
                 component.backgroundOpacityVal != settings.backgroundOpacity ||
-                component.customAnsiColorsHexVal != settings.customAnsiColorsHex
+                component.customAnsiColorsHexVal != settings.customAnsiColorsHex ||
+                component.smartPasteMinLinkSizeMbVal != settings.smartPasteMinLinkSizeMb
     }
 
     override fun apply() {
@@ -61,6 +62,7 @@ class EmbeddedTerminalConfigurable : Configurable {
         settings.customCursor = component.customCursorVal
         settings.backgroundOpacity = component.backgroundOpacityVal
         settings.customAnsiColorsHex = component.customAnsiColorsHexVal
+        settings.smartPasteMinLinkSizeMb = component.smartPasteMinLinkSizeMbVal
 
         // Publish configuration changes to all terminal instances
         com.intellij.openapi.application.ApplicationManager.getApplication().messageBus
@@ -88,6 +90,7 @@ class EmbeddedTerminalConfigurable : Configurable {
         component.customCursorVal = settings.customCursor
         component.backgroundOpacityVal = settings.backgroundOpacity
         component.customAnsiColorsHexVal = settings.customAnsiColorsHex
+        component.smartPasteMinLinkSizeMbVal = settings.smartPasteMinLinkSizeMb
         
         component.triggerColorUiUpdate()
     }
@@ -112,6 +115,7 @@ class EmbeddedTerminalSettingsComponent {
     private val autoCloseOnExitCheckbox = JCheckBox(TerminalBundle.message("auto.close"))
     private val historyLimitField = JTextField()
     private val showScrollBarCheckbox = JCheckBox(TerminalBundle.message("show.scrollbar"))
+    private val smartPasteMinLinkSizeMbField = JTextField()
 
     // Color UI Elements
     private val colorSchemeComboBox = ComboBox<String>().apply {
@@ -173,6 +177,10 @@ class EmbeddedTerminalSettingsComponent {
     var showScrollBarSelected: Boolean
         get() = showScrollBarCheckbox.isSelected
         set(value) { showScrollBarCheckbox.isSelected = value }
+
+    var smartPasteMinLinkSizeMbVal: Int
+        get() = smartPasteMinLinkSizeMbField.text.toIntOrNull()?.coerceAtLeast(1) ?: 50
+        set(value) { smartPasteMinLinkSizeMbField.text = value.toString() }
 
     // Color Getters / Setters
     var colorSchemeNameVal: String
@@ -290,6 +298,7 @@ class EmbeddedTerminalSettingsComponent {
             .addComponent(autoCloseOnExitCheckbox, 1)
             .addLabeledComponent(TerminalBundle.message("history.limit"), historyLimitField, 1, false)
             .addComponent(showScrollBarCheckbox, 1)
+            .addLabeledComponent(TerminalBundle.message("smart.paste.min.size"), smartPasteMinLinkSizeMbField, 1, false)
             .addSeparator(8)
             .addLabeledComponent(TerminalBundle.message("color.scheme"), colorSchemeComboBox, 1, false)
             .addComponent(customColorsPanel, 4)

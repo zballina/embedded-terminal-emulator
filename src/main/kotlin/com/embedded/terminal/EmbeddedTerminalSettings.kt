@@ -37,6 +37,7 @@ class EmbeddedTerminalSettings : PersistentStateComponent<EmbeddedTerminalSettin
         var customCursor: String = "#F8F8F0"
         var backgroundOpacity: Int = 100
         var customAnsiColorsHex: String = "#21222C;#FF5555;#50FA7B;#F1FA8C;#BD93F9;#FF79C6;#8BE9FD;#F8F8F2;#6272A4;#FF6E6E;#69FF94;#FFFFA5;#D6ACFF;#FF92DF;#A4FFFF;#FFFFFF"
+        var smartPasteMinLinkSizeMb: Int = 50
     }
 
     private var myState = State()
@@ -49,7 +50,11 @@ class EmbeddedTerminalSettings : PersistentStateComponent<EmbeddedTerminalSettin
 
     companion object {
         fun getInstance(): EmbeddedTerminalSettings {
-            return ApplicationManager.getApplication().getService(EmbeddedTerminalSettings::class.java)
+            val app = ApplicationManager.getApplication()
+            if (app == null) {
+                return EmbeddedTerminalSettings()
+            }
+            return app.getService(EmbeddedTerminalSettings::class.java)
         }
     }
 }

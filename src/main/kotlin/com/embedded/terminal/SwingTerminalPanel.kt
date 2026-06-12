@@ -2,6 +2,9 @@ package com.embedded.terminal
 
 import com.intellij.openapi.actionSystem.DataProvider
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import java.awt.*
 import java.awt.event.*
 import java.awt.font.TextAttribute
@@ -12,10 +15,13 @@ import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.DataFlavor
 
 class SwingTerminalPanel(
+    val project: com.intellij.openapi.project.Project?,
     val buffer: TerminalBuffer,
     val stateEngine: TerminalStateEngine,
     var onInput: ((String) -> Unit)? = null
 ) : JPanel(), KeyListener, MouseListener, MouseMotionListener, FocusListener, ComponentListener, DataProvider, javax.swing.Scrollable {
+
+    var triggerSmartPasteCallback: (() -> Unit)? = null
 
     var onResize: ((Int, Int) -> Unit)? = null
 
@@ -250,6 +256,7 @@ class SwingTerminalPanel(
         // Draw cells from snapshot
         for (y in 0 until snapRows) {
             val line = snapLines[y]
+            val links = findLinksInLine(line)
             for (x in 0 until snapCols) {
                 if (x >= line.size) break
                 val cell = line[x]
@@ -280,7 +287,13 @@ class SwingTerminalPanel(
                     if (cell.isBold) style = style or Font.BOLD
                     if (cell.isItalic) style = style or Font.ITALIC
 
-                    val fg = resolveCellColor(cell.fgColor, defaultFg, activeColors.ansi)
+                    val isLink = links.any { x in it }
+                    val linkColor = if (defaultBg.red + defaultBg.green + defaultBg.blue < 380) {
+                        Color(88, 166, 255) // Bright blue for dark mode
+                    } else {
+                        Color(0, 102, 204) // Darker blue for light mode
+                    }
+                    val fg = if (isLink) linkColor else resolveCellColor(cell.fgColor, defaultFg, activeColors.ansi)
                     val key = GlyphKey(cell.grapheme, style, fg)
                     val loc = glyphAtlas.getGlyph(key, terminalFont, charWidth, rowHeight, charAscent, fm)
 
@@ -291,7 +304,7 @@ class SwingTerminalPanel(
                         null
                     )
 
-                    if (cell.isUnderline) {
+                    if (cell.isUnderline || isLink) {
                         g2.stroke = BasicStroke(1f)
                         g2.color = fg
                         g2.drawLine(cellX, cellY + rowHeight - 2, cellX + cellW, cellY + rowHeight - 2)
@@ -547,21 +560,11 @@ class SwingTerminalPanel(
         }
 
         if (modifierDown && code == KeyEvent.VK_V) {
-            // Paste
-            try {
-                val contents = Toolkit.getDefaultToolkit().systemClipboard.getContents(null)
-                if (contents != null && contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
-                    val text = contents.getTransferData(DataFlavor.stringFlavor) as String
-                    val processedText = if (buffer.isBracketedPasteMode) {
-                        "\u001b[200~$text\u001b[201~"
-                    } else {
-                        text
-                    }
-                    onInput?.invoke(processedText)
-                    resetScrollToBottom()
-                }
-            } catch (ex: Exception) {
-                ex.printStackTrace()
+            System.err.println("[SMART_PASTE] VK_V pressed. modifierDown=$modifierDown, isShiftDown=${e.isShiftDown}")
+            if (e.isShiftDown) {
+                triggerSmartPasteCallback?.invoke()
+            } else {
+                handleNormalPaste()
             }
             e.consume()
             return
@@ -727,7 +730,37 @@ class SwingTerminalPanel(
         selEndY = -1
     }
 
-    override fun mouseClicked(e: MouseEvent) {}
+    override fun mouseClicked(e: MouseEvent) {
+        if (e.button == MouseEvent.BUTTON1) {
+            val pt = getBufferCellCoords(e.x, e.y)
+            val y = pt.y
+            val lineCells = synchronized(buffer) {
+                if (y in 0 until buffer.totalLines()) {
+                    buffer.getLine(y)
+                } else {
+                    null
+                }
+            }
+            if (lineCells != null) {
+                val links = findLinksInLine(lineCells)
+                val x = pt.x
+                val matchedRange = links.find { x in it }
+                if (matchedRange != null && project != null) {
+                    val lineText = lineCells.joinToString("") { it.grapheme }
+                    val pathStr = lineText.substring(matchedRange.first, matchedRange.last + 1)
+                    val file = java.io.File(pathStr)
+                    if (file.exists()) {
+                        val virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file)
+                        if (virtualFile != null) {
+                            ApplicationManager.getApplication().invokeLater {
+                                FileEditorManager.getInstance(project).openFile(virtualFile, true)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     override fun mouseEntered(e: MouseEvent) {}
     override fun mouseExited(e: MouseEvent) {}
     override fun mouseMoved(e: MouseEvent) {}
@@ -896,4 +929,43 @@ class SwingTerminalPanel(
         val cur: Color,
         val ansi: List<Color>
     )
+
+    private fun handleNormalPaste() {
+        try {
+            val clipboard = SystemClipboardWrapper()
+            val contents = clipboard.getContents() ?: return
+            if (contents.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                val list = contents.getTransferData(DataFlavor.javaFileListFlavor) as? List<*>
+                val files = list?.filterIsInstance<java.io.File>() ?: emptyList()
+                if (files.isNotEmpty()) {
+                    val settings = EmbeddedTerminalSettings.getInstance().state
+                    val shellType = ShellEscaper.detectShell(settings.shellPath)
+                    val escapedPaths = files.joinToString(" ") { ShellEscaper.escape(it.absolutePath, shellType) }
+                    onInput?.invoke(escapedPaths)
+                    resetScrollToBottom()
+                    return
+                }
+            }
+            if (contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                val text = contents.getTransferData(DataFlavor.stringFlavor) as String
+                val processedText = if (buffer.isBracketedPasteMode) {
+                    "\u001b[200~$text\u001b[201~"
+                } else {
+                    text
+                }
+                onInput?.invoke(processedText)
+                resetScrollToBottom()
+            }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun findLinksInLine(line: Array<TerminalCell>): List<IntRange> {
+        val lineText = line.joinToString("") { it.grapheme }
+        val sessionsDir = SmartPastePaths.getSessionsDir()
+        val sessionsDirEscaped = Regex.escape(sessionsDir)
+        val pathRegex = Regex("$sessionsDirEscaped/[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+")
+        return pathRegex.findAll(lineText).map { it.range }.toList()
+    }
 }

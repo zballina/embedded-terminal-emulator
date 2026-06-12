@@ -30,7 +30,8 @@ object TerminalBundle {
         "bg.opacity" to "Background opacity (Konsole style):",
         "ansi.palette" to "16-color ANSI palette (Custom):",
         "close.confirm.title" to "Close Terminal Tab?",
-        "close.confirm.msg" to "An active process is running in this tab. Closing it will terminate the process. Do you want to proceed?"
+        "close.confirm.msg" to "An active process is running in this tab. Closing it will terminate the process. Do you want to proceed?",
+        "smart.paste.min.size" to "Smart Paste: Min size to link instead of copy (MB):"
     )
 
     private val es = mapOf(
@@ -55,6 +56,7 @@ object TerminalBundle {
         "bg.opacity" to "Opacidad del fondo (Konsole style):",
         "ansi.palette" to "Paleta ANSI de 16 colores (Custom):",
         "close.confirm.title" to "¿Cerrar pestaña de terminal?",
-        "close.confirm.msg" to "Hay un proceso activo ejecutándose en esta pestaña. Cerrarla terminará el proceso de forma abrupta. ¿Deseas continuar?"
+        "close.confirm.msg" to "Hay un proceso activo ejecutándose en esta pestaña. Cerrarla terminará el proceso de forma abrupta. ¿Deseas continuar?",
+        "smart.paste.min.size" to "Smart Paste: Tamaño mínimo para enlazar en vez de copiar (MB):"
     )
 }

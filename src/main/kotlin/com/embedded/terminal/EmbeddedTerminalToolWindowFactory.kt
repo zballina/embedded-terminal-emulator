@@ -141,11 +141,12 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
     }
 }
 
-class EmbeddedTerminalController(private val project: Project) : Disposable {
+open class EmbeddedTerminalController(private val project: Project, private val startPtyOnInit: Boolean = true) : Disposable, TerminalSession {
+    override val sessionId = java.util.UUID.randomUUID().toString()
     private val settings = EmbeddedTerminalSettings.getInstance().state
     val buffer = TerminalBuffer(80, 24, settings.historyLimit)
     val stateEngine = TerminalStateEngine(buffer)
-    val terminalPanel = SwingTerminalPanel(buffer, stateEngine)
+    val terminalPanel = SwingTerminalPanel(project, buffer, stateEngine)
     val scrollBar = javax.swing.JScrollBar(javax.swing.JScrollBar.VERTICAL)
     val scrollPane = com.intellij.ui.components.JBScrollPane().apply {
         val customViewport = object : javax.swing.JViewport() {
@@ -258,6 +259,14 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
             writeToPty(input)
         }
 
+        // Smart paste trigger binding
+        terminalPanel.triggerSmartPasteCallback = {
+            SmartPasteController.triggerSmartPaste(project, terminalPanel, this)
+        }
+
+        // Drag and drop handler registration
+        terminalPanel.transferHandler = TerminalTransferHandler(project, terminalPanel, this)
+
         // PTY resizing synchronization
         terminalPanel.onResize = { cols, rows ->
             targetCols = cols
@@ -280,7 +289,7 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
             }
         )
 
-        startPty()
+        if (startPtyOnInit) startPty()
     }
 
     private fun writeToPty(input: String) {
@@ -647,6 +656,10 @@ class EmbeddedTerminalController(private val project: Project) : Disposable {
         } catch (t: Throwable) {
             false
         }
+    }
+
+    override fun registerTempFile(file: java.io.File) {
+        tempFilesToDelete.add(file)
     }
 
     override fun dispose() {
