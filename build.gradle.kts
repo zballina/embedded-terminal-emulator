@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.embedded.terminal"
-version = "1.28.0"
+version = "1.30.0"
 
 repositories {
     mavenCentral()

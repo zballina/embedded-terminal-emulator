@@ -22,7 +22,7 @@
     ]]></description>
  
      <change-notes><![CDATA[
-    <h4>What's new in version 1.28.0:</h4>
+    <h4>What's new in version 1.30.0:</h4>
     <ul>
         <li><b>Snappy Reactive Repaint & Low-Latency Rendering:</b> Redesigned the terminal repaint scheduler to be fully event-driven, triggering repaints instantly on EDT for typing/idle periods and rate-limiting to 60 FPS under heavy output. Removed background polling thread and extra EDT scheduling hops to make typing extremely snappy.</li>
         <li><b>ANSI Inverse Video Support (SGR 7 & 27):</b> Implemented support for ANSI inverse/reverse video mode (SGR 7 to enable, SGR 27 to disable). This ensures that highlighted selections inside interactive CLI prompts (such as <code>agy</code> option selectors) are rendered with proper background/foreground color swapping.</li>
