@@ -36,6 +36,7 @@ class TerminalBuffer(
     private var savedActiveItalic: Boolean = false
     private var savedActiveUnderline: Boolean = false
     private var savedActiveHyperlinkUrl: String? = null
+    private var savedActiveInverse: Boolean = false
 
     // Active style attributes
     var activeFgColor: Color? = null
@@ -44,6 +45,8 @@ class TerminalBuffer(
     var activeItalic: Boolean = false
     var activeUnderline: Boolean = false
     var activeHyperlinkUrl: String? = null
+    var activeInverse: Boolean = false
+    var onLineAppended: (() -> Unit)? = null
 
     init {
         dirtyTracker.markAllDirty(rows, cols)
@@ -101,6 +104,7 @@ class TerminalBuffer(
             cell.isItalic = activeItalic
             cell.isUnderline = activeUnderline
             cell.hyperlinkUrl = activeHyperlinkUrl
+            cell.isInverse = activeInverse
             dirtyTracker.markDirty(y, x)
 
             // Advance cursor
@@ -119,11 +123,70 @@ class TerminalBuffer(
                     contCell.isItalic = activeItalic
                     contCell.isUnderline = activeUnderline
                     contCell.hyperlinkUrl = activeHyperlinkUrl
+                    contCell.isInverse = activeInverse
                     dirtyTracker.markDirty(y, contX)
                 }
                 cursorX = minOf(cols, x + 2)
             } else {
                 cursorX = minOf(cols, x + 1)
+            }
+        }
+    }
+
+    fun writeGraphemes(graphemes: List<String>) {
+        synchronized(this) {
+            val segmenter = GraphemeSegmenterFactory.instance
+            for (grapheme in graphemes) {
+                val cellWidth = segmenter.getCellWidth(grapheme)
+                val neededCols = if (cellWidth == CellWidth.DOUBLE) 2 else 1
+
+                if (cursorX >= cols || (cellWidth == CellWidth.DOUBLE && cursorX + neededCols > cols)) {
+                    cursorX = 0
+                    cursorY++
+                    if (cursorY >= rows) {
+                        scrollUp()
+                        cursorY = rows - 1
+                    }
+                }
+
+                val y = cursorY.coerceIn(0, rows - 1)
+                val x = cursorX.coerceIn(0, cols - 1)
+
+                val cell = grid[y][x]
+                cell.reset()
+                cell.grapheme = grapheme
+                cell.width = cellWidth
+                cell.isContinuation = false
+                cell.fgColor = activeFgColor
+                cell.bgColor = activeBgColor
+                cell.isBold = activeBold
+                cell.isItalic = activeItalic
+                cell.isUnderline = activeUnderline
+                cell.hyperlinkUrl = activeHyperlinkUrl
+                cell.isInverse = activeInverse
+                dirtyTracker.markDirty(y, x)
+
+                if (cellWidth == CellWidth.DOUBLE) {
+                    val contX = x + 1
+                    if (contX < cols) {
+                        val contCell = grid[y][contX]
+                        contCell.reset()
+                        contCell.grapheme = ""
+                        contCell.width = CellWidth.SINGLE
+                        contCell.isContinuation = true
+                        contCell.fgColor = activeFgColor
+                        contCell.bgColor = activeBgColor
+                        contCell.isBold = activeBold
+                        contCell.isItalic = activeItalic
+                        contCell.isUnderline = activeUnderline
+                        contCell.hyperlinkUrl = activeHyperlinkUrl
+                        contCell.isInverse = activeInverse
+                        dirtyTracker.markDirty(y, contX)
+                    }
+                    cursorX = minOf(cols, x + 2)
+                } else {
+                    cursorX = minOf(cols, x + 1)
+                }
             }
         }
     }
@@ -205,6 +268,7 @@ class TerminalBuffer(
             if (top == 0 && bottom == rows - 1 && !isAlternateBufferActive) {
                 val poppedLine = Array(cols) { x -> TerminalCell().apply { copyFrom(grid[0][x]) } }
                 history.appendLine(poppedLine)
+                onLineAppended?.invoke()
             }
             
             for (y in top until bottom) {
@@ -582,6 +646,7 @@ class TerminalBuffer(
             savedActiveItalic = activeItalic
             savedActiveUnderline = activeUnderline
             savedActiveHyperlinkUrl = activeHyperlinkUrl
+            savedActiveInverse = activeInverse
         }
     }
 
@@ -596,6 +661,7 @@ class TerminalBuffer(
             activeItalic = savedActiveItalic
             activeUnderline = savedActiveUnderline
             activeHyperlinkUrl = savedActiveHyperlinkUrl
+            activeInverse = savedActiveInverse
             dirtyTracker.markRowDirty(oldY, cols)
             dirtyTracker.markRowDirty(cursorY, cols)
         }
@@ -609,6 +675,7 @@ class TerminalBuffer(
             activeItalic = false
             activeUnderline = false
             activeHyperlinkUrl = null
+            activeInverse = false
         }
     }
 }

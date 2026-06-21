@@ -2,18 +2,20 @@ package com.embedded.terminal
 
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
+import kotlin.jvm.Volatile
 
 class RenderScheduler(
     private val repaintTrigger: () -> Unit
 ) {
     private var scheduler: ScheduledExecutorService? = null
-    private var future: ScheduledFuture<*>? = null
     
     @Volatile
-    private var hasPendingRepaint = false
+    private var isPending = false
+    
+    @Volatile
+    private var lastPaintTime = 0L
 
     fun start() {
         synchronized(this) {
@@ -22,27 +24,48 @@ class RenderScheduler(
                     Thread(runnable, "TerminalRenderSchedulerThread").apply { isDaemon = true }
                 }
             }
-            if (future == null || future!!.isCancelled || future!!.isDone) {
-                future = scheduler!!.scheduleAtFixedRate({
-                    if (hasPendingRepaint) {
-                        hasPendingRepaint = false
-                        SwingUtilities.invokeLater {
-                            repaintTrigger()
-                        }
-                    }
-                }, 0, 16666, TimeUnit.MICROSECONDS) // 60Hz = ~16.6ms
-            }
         }
     }
 
     fun requestRepaint() {
-        hasPendingRepaint = true
+        if (isPending) return
+        synchronized(this) {
+            if (isPending) return
+            isPending = true
+            
+            val now = System.currentTimeMillis()
+            val elapsed = now - lastPaintTime
+            
+            val sched = scheduler
+            if (elapsed >= 16 || sched == null || sched.isShutdown) {
+                SwingUtilities.invokeLater {
+                    isPending = false
+                    lastPaintTime = System.currentTimeMillis()
+                    repaintTrigger()
+                }
+            } else {
+                val delay = 16L - elapsed
+                try {
+                    sched.schedule({
+                        SwingUtilities.invokeLater {
+                            isPending = false
+                            lastPaintTime = System.currentTimeMillis()
+                            repaintTrigger()
+                        }
+                    }, delay, TimeUnit.MILLISECONDS)
+                } catch (e: Exception) {
+                    SwingUtilities.invokeLater {
+                        isPending = false
+                        lastPaintTime = System.currentTimeMillis()
+                        repaintTrigger()
+                    }
+                }
+            }
+        }
     }
 
     fun shutdown() {
         synchronized(this) {
-            future?.cancel(true)
-            future = null
             scheduler?.shutdown()
             try {
                 scheduler?.awaitTermination(100, TimeUnit.MILLISECONDS)

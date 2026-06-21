@@ -35,6 +35,7 @@ sealed interface TerminalCommand {
     data class SetBold(val enabled: Boolean) : TerminalCommand
     data class SetItalic(val enabled: Boolean) : TerminalCommand
     data class SetUnderline(val enabled: Boolean) : TerminalCommand
+    data class SetInverse(val enabled: Boolean) : TerminalCommand
     
     // Iteration 3 Advanced VT commands
     data class UseAlternateBuffer(val useAlt: Boolean) : TerminalCommand

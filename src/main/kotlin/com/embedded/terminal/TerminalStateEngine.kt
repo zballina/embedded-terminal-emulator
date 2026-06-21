@@ -40,9 +40,7 @@ class TerminalStateEngine(val buffer: TerminalBuffer) {
         when (command) {
             is TerminalCommand.WriteText -> {
                 val clusters = GraphemeSegmenterFactory.instance.nextClusters(command.text)
-                for (cluster in clusters) {
-                    buffer.writeGrapheme(cluster)
-                }
+                buffer.writeGraphemes(clusters)
             }
             TerminalCommand.NewLine -> buffer.newLine()
             TerminalCommand.CarriageReturn -> buffer.carriageReturn()
@@ -75,6 +73,7 @@ class TerminalStateEngine(val buffer: TerminalBuffer) {
             is TerminalCommand.SetBold -> buffer.activeBold = command.enabled
             is TerminalCommand.SetItalic -> buffer.activeItalic = command.enabled
             is TerminalCommand.SetUnderline -> buffer.activeUnderline = command.enabled
+            is TerminalCommand.SetInverse -> buffer.activeInverse = command.enabled
 
             // Iteration 3
             is TerminalCommand.UseAlternateBuffer -> buffer.useAlternateBuffer(command.useAlt)

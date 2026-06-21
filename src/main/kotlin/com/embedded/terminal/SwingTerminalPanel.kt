@@ -42,6 +42,12 @@ class SwingTerminalPanel(
     // Scrollback offset (0 means scrolled all the way to the bottom)
     var scrollOffset = 0
     var scrollBar: javax.swing.JScrollBar? = null
+    private var fractionalScroll = 0.0
+    private var fractionalReportScroll = 0.0
+    @Volatile
+    private var cachedFont: Font? = null
+    @Volatile
+    private var cachedColors: ActiveColors? = null
 
     // Text selection coordinates in buffer space
     private var selStartX = -1
@@ -59,6 +65,7 @@ class SwingTerminalPanel(
             if (spans.isNotEmpty()) buffer.dirtyTracker.clear()
         }
         if (spans.isEmpty()) return@RenderScheduler
+        updateScrollBar()
         if (spans.size > 50) {
             repaint()
         } else {
@@ -77,14 +84,16 @@ class SwingTerminalPanel(
 
     fun requestRepaint() {
         renderScheduler.requestRepaint()
-        updateScrollBar()
     }
 
     fun updateScrollBar() {
         val bar = scrollBar ?: return
-        val historySize = buffer.history.size
+        val isAlt = buffer.isAlternateBufferActive
+        val historySize = if (isAlt) 0 else buffer.history.size
         val rows = buffer.rows
-        bar.setValues(historySize - scrollOffset, rows, 0, historySize + rows)
+        val currentOffset = if (isAlt) 0 else scrollOffset.coerceIn(0, historySize)
+        bar.setValues(historySize - currentOffset, rows, 0, historySize + rows)
+        bar.isEnabled = !isAlt
     }
 
     private fun resetScrollToBottom() {
@@ -108,16 +117,24 @@ class SwingTerminalPanel(
         addMouseWheelListener { e ->
             synchronized(buffer) {
                 if (buffer.mouseTrackingMode > 0) {
-                    val btn = if (e.wheelRotation < 0) 64 else 65
-                    val pt = getBufferCellCoords(e.x, e.y)
-                    val x = pt.x + 1
-                    val historySize = buffer.history.size
-                    val viewStartLine = if (buffer.isAlternateBufferActive) 0 else historySize - scrollOffset
-                    val y = (pt.y - viewStartLine) + 1
-                    if (buffer.isMouseSgrEnabled) {
-                        onInput?.invoke("\u001b[<$btn;$x;${y}M")
-                    } else {
-                        onInput?.invoke("\u001b[M" + (btn + 32).toChar() + (x + 32).toChar() + (y + 32).toChar())
+                    fractionalReportScroll -= e.preciseWheelRotation
+                    val reportTicks = fractionalReportScroll.toInt()
+                    if (reportTicks != 0) {
+                        fractionalReportScroll -= reportTicks
+                        val btn = if (reportTicks > 0) 64 else 65
+                        val pt = getBufferCellCoords(e.x, e.y)
+                        val x = pt.x + 1
+                        val historySize = buffer.history.size
+                        val viewStartLine = if (buffer.isAlternateBufferActive) 0 else historySize - scrollOffset
+                        val y = (pt.y - viewStartLine) + 1
+                        val absTicks = Math.abs(reportTicks)
+                        for (i in 0 until absTicks) {
+                            if (buffer.isMouseSgrEnabled) {
+                                onInput?.invoke("\u001b[<$btn;$x;${y}M")
+                            } else {
+                                onInput?.invoke("\u001b[M" + (btn + 32).toChar() + (x + 32).toChar() + (y + 32).toChar())
+                            }
+                        }
                     }
                     e.consume()
                     return@addMouseWheelListener
@@ -128,11 +145,16 @@ class SwingTerminalPanel(
                     return@addMouseWheelListener
                 }
 
-                val oldOffset = scrollOffset
-                scrollOffset = (scrollOffset - e.wheelRotation * 3).coerceIn(0, buffer.history.size)
-                if (scrollOffset != oldOffset) {
-                    repaint()
-                    updateScrollBar()
+                fractionalScroll -= e.preciseWheelRotation * 3.0 // 3 lines per full tick
+                val intScroll = fractionalScroll.toInt()
+                if (intScroll != 0) {
+                    fractionalScroll -= intScroll
+                    val oldOffset = scrollOffset
+                    scrollOffset = (scrollOffset + intScroll).coerceIn(0, buffer.history.size)
+                    if (scrollOffset != oldOffset) {
+                        repaint()
+                        updateScrollBar()
+                    }
                 }
                 e.consume()
             }
@@ -152,6 +174,15 @@ class SwingTerminalPanel(
             requestRepaint()
         }
         blinkTimer?.start()
+
+        // Link scrollback offset increment
+        buffer.onLineAppended = {
+            synchronized(buffer) {
+                if (scrollOffset > 0) {
+                    scrollOffset = minOf(buffer.history.size, scrollOffset + 1)
+                }
+            }
+        }
     }
 
     override fun addNotify() {
@@ -167,6 +198,9 @@ class SwingTerminalPanel(
     }
 
     private fun getTerminalFont(): Font {
+        val cached = cachedFont
+        if (cached != null) return cached
+
         val settings = EmbeddedTerminalSettings.getInstance().state
         val scheme = EditorColorsManager.getInstance().globalScheme
         val fontFamily = if (settings.useEditorTheme) scheme.consoleFontName else settings.customFontFamily
@@ -176,7 +210,9 @@ class SwingTerminalPanel(
         if (settings.enableLigatures) {
             attributes[TextAttribute.LIGATURES] = TextAttribute.LIGATURES_ON
         }
-        return Font(fontFamily, Font.PLAIN, fontSize).deriveFont(attributes)
+        val font = Font(fontFamily, Font.PLAIN, fontSize).deriveFont(attributes)
+        cachedFont = font
+        return font
     }
 
     private fun getLineHeightMultiplier(): Double {
@@ -215,6 +251,7 @@ class SwingTerminalPanel(
         val snapCursorVisible: Boolean
         val snapIsAlt: Boolean
         val snapHistorySize: Int
+        val snapScrollOffset: Int
         val snapLines: Array<Array<TerminalCell>>
 
         synchronized(buffer) {
@@ -225,7 +262,8 @@ class SwingTerminalPanel(
             snapCursorVisible = buffer.isCursorVisible
             snapIsAlt = buffer.isAlternateBufferActive
             snapHistorySize = buffer.history.size
-            val viewStartLine = if (snapIsAlt) 0 else snapHistorySize - scrollOffset
+            snapScrollOffset = if (snapIsAlt) 0 else scrollOffset.coerceIn(0, snapHistorySize)
+            val viewStartLine = if (snapIsAlt) 0 else snapHistorySize - snapScrollOffset
             // Deep-copy visible rows so painting is race-free.
             // 80×24 = 1920 cells × ~8 field copies ≈ 15 µs — much cheaper than
             // holding the lock for the entire paint cycle.
@@ -267,15 +305,22 @@ class SwingTerminalPanel(
                 val cellY = padding + y * rowHeight
                 val cellW = charWidth * (if (cell.width == CellWidth.DOUBLE) 2 else 1)
 
-                // 1. Draw cell background if custom
-                val bg = resolveCellColor(cell.bgColor, defaultBg, activeColors.ansi)
+                // 1. Draw cell background if custom/inverted
+                var finalBgColor = cell.bgColor
+                var finalFgColor = cell.fgColor
+                if (cell.isInverse) {
+                    finalBgColor = cell.fgColor ?: defaultFg
+                    finalFgColor = cell.bgColor ?: defaultBg
+                }
+
+                val bg = resolveCellColor(finalBgColor, defaultBg, activeColors.ansi)
                 if (bg != defaultBg) {
                     g2.color = bg
                     g2.fillRect(cellX, cellY, cellW, rowHeight)
                 }
 
                 // 2. Selection overlay
-                val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - scrollOffset
+                val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - snapScrollOffset
                 if (isCellSelected(x, snapViewStartLine + y)) {
                     g2.color = activeColors.sel
                     g2.fillRect(cellX, cellY, cellW, rowHeight)
@@ -293,7 +338,7 @@ class SwingTerminalPanel(
                     } else {
                         Color(0, 102, 204) // Darker blue for light mode
                     }
-                    val fg = if (isLink) linkColor else resolveCellColor(cell.fgColor, defaultFg, activeColors.ansi)
+                    val fg = if (isLink) linkColor else resolveCellColor(finalFgColor, defaultFg, activeColors.ansi)
                     val key = GlyphKey(cell.grapheme, style, fg)
                     val loc = glyphAtlas.getGlyph(key, terminalFont, charWidth, rowHeight, charAscent, fm)
 
@@ -315,7 +360,7 @@ class SwingTerminalPanel(
 
         // Draw cursor from snapshot
         if (snapCursorVisible) {
-            val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - scrollOffset
+            val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - snapScrollOffset
             val cursorAbsLine = snapCursorY + snapHistorySize
             val isCursorInView = cursorAbsLine in snapViewStartLine until (snapViewStartLine + snapRows)
             if (isCursorInView) {
@@ -466,6 +511,35 @@ class SwingTerminalPanel(
     override fun keyPressed(e: KeyEvent) {
         val code = e.keyCode
         val isMac = System.getProperty("os.name").lowercase().contains("mac")
+
+        // Page Up/Down viewport scrolling in normal mode
+        if (!buffer.isAlternateBufferActive) {
+            val hasScrollModifiers = !e.isControlDown && !e.isAltDown && !e.isMetaDown
+            if (code == KeyEvent.VK_PAGE_UP && hasScrollModifiers) {
+                synchronized(buffer) {
+                    val oldOffset = scrollOffset
+                    scrollOffset = (scrollOffset + (buffer.rows - 2)).coerceIn(0, buffer.history.size)
+                    if (scrollOffset != oldOffset) {
+                        repaint()
+                        updateScrollBar()
+                    }
+                }
+                e.consume()
+                return
+            }
+            if (code == KeyEvent.VK_PAGE_DOWN && hasScrollModifiers) {
+                synchronized(buffer) {
+                    val oldOffset = scrollOffset
+                    scrollOffset = (scrollOffset - (buffer.rows - 2)).coerceIn(0, buffer.history.size)
+                    if (scrollOffset != oldOffset) {
+                        repaint()
+                        updateScrollBar()
+                    }
+                }
+                e.consume()
+                return
+            }
+        }
 
         // macOS modifier keys mappings
         if (isMac) {
@@ -716,7 +790,9 @@ class SwingTerminalPanel(
     private fun getBufferCellCoords(mx: Int, my: Int): Point {
         synchronized(buffer) {
             val historySize = buffer.history.size
-            val viewStartLine = historySize - scrollOffset
+            val isAlt = buffer.isAlternateBufferActive
+            val currentOffset = if (isAlt) 0 else scrollOffset.coerceIn(0, historySize)
+            val viewStartLine = if (isAlt) 0 else historySize - currentOffset
             val x = ((mx - padding) / charWidth).coerceIn(0, buffer.cols - 1)
             val y = (((my - padding) / rowHeight).coerceIn(0, buffer.rows - 1)) + viewStartLine
             return Point(x, y)
@@ -731,30 +807,81 @@ class SwingTerminalPanel(
     }
 
     override fun mouseClicked(e: MouseEvent) {
-        if (e.button == MouseEvent.BUTTON1) {
-            val pt = getBufferCellCoords(e.x, e.y)
-            val y = pt.y
-            val lineCells = synchronized(buffer) {
-                if (y in 0 until buffer.totalLines()) {
-                    buffer.getLine(y)
-                } else {
-                    null
-                }
+        if (SwingUtilities.isLeftMouseButton(e)) {
+            if (e.clickCount == 2) {
+                handleDoubleSelect(e)
+            } else if (e.clickCount == 1) {
+                handleLinkClick(e)
             }
-            if (lineCells != null) {
-                val links = findLinksInLine(lineCells)
-                val x = pt.x
-                val matchedRange = links.find { x in it }
-                if (matchedRange != null && project != null) {
-                    val lineText = lineCells.joinToString("") { it.grapheme }
-                    val pathStr = lineText.substring(matchedRange.first, matchedRange.last + 1)
-                    val file = java.io.File(pathStr)
-                    if (file.exists()) {
-                        val virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file)
-                        if (virtualFile != null) {
-                            ApplicationManager.getApplication().invokeLater {
-                                FileEditorManager.getInstance(project).openFile(virtualFile, true)
-                            }
+        }
+    }
+
+    private fun handleDoubleSelect(e: MouseEvent) {
+        val pt = getBufferCellCoords(e.x, e.y)
+        val y = pt.y
+        val x = pt.x
+        val lineCells = synchronized(buffer) {
+            if (y in 0 until buffer.totalLines()) {
+                buffer.getLine(y)
+            } else {
+                null
+            }
+        } ?: return
+
+        if (x >= lineCells.size) return
+
+        val delimiters = setOf(' ', '"', '\'', '(', ')', '[', ']', '{', '}', '<', '>', ';', ',', '|', '&', '*', '^', '?', '!', '=', '+', '`', '\t', '\n', '\r')
+        fun isWordChar(cell: TerminalCell): Boolean {
+            val g = cell.grapheme
+            if (g.isEmpty() || g.isBlank()) return false
+            val c = g.first()
+            return c !in delimiters
+        }
+
+        // Search left
+        var startX = x
+        while (startX > 0 && isWordChar(lineCells[startX - 1])) {
+            startX--
+        }
+
+        // Search right
+        var endX = x
+        while (endX < lineCells.size - 1 && isWordChar(lineCells[endX + 1])) {
+            endX++
+        }
+
+        if (isWordChar(lineCells[x])) {
+            selStartX = startX
+            selStartY = y
+            selEndX = endX
+            selEndY = y
+            repaint()
+        }
+    }
+
+    private fun handleLinkClick(e: MouseEvent) {
+        val pt = getBufferCellCoords(e.x, e.y)
+        val y = pt.y
+        val lineCells = synchronized(buffer) {
+            if (y in 0 until buffer.totalLines()) {
+                buffer.getLine(y)
+            } else {
+                null
+            }
+        }
+        if (lineCells != null) {
+            val links = findLinksInLine(lineCells)
+            val x = pt.x
+            val matchedRange = links.find { x in it }
+            if (matchedRange != null && project != null) {
+                val lineText = lineCells.joinToString("") { it.grapheme }
+                val pathStr = lineText.substring(matchedRange.first, matchedRange.last + 1)
+                val file = java.io.File(pathStr)
+                if (file.exists()) {
+                    val virtualFile = LocalFileSystem.getInstance().findFileByIoFile(file)
+                    if (virtualFile != null) {
+                        ApplicationManager.getApplication().invokeLater {
+                            FileEditorManager.getInstance(project).openFile(virtualFile, true)
                         }
                     }
                 }
@@ -787,6 +914,8 @@ class SwingTerminalPanel(
     override fun componentHidden(e: ComponentEvent) {}
 
     fun recalculateDimensions() {
+        cachedFont = null
+        cachedColors = null
         if (width < 50 || height < 30) return
         val font = getTerminalFont()
         val metrics = getFontMetrics(font)
@@ -824,6 +953,9 @@ class SwingTerminalPanel(
     }
 
     private fun resolveActiveColors(): ActiveColors {
+        val cached = cachedColors
+        if (cached != null) return cached
+
         val settings = EmbeddedTerminalSettings.getInstance().state
         val schemeName = settings.colorSchemeName
 
@@ -862,7 +994,9 @@ class SwingTerminalPanel(
             }
         }
 
-        return ActiveColors(defaultBg, defaultFg, selectionColor, cursorColor, ansiColors)
+        val colors = ActiveColors(defaultBg, defaultFg, selectionColor, cursorColor, ansiColors)
+        cachedColors = colors
+        return colors
     }
 
     private fun resolveCellColor(cellColor: Color?, defaultColor: Color, ansiColors: List<Color>): Color {

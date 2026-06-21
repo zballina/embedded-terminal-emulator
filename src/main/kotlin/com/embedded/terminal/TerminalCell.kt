@@ -11,7 +11,8 @@ data class TerminalCell(
     var isBold: Boolean = false,
     var isItalic: Boolean = false,
     var isUnderline: Boolean = false,
-    var hyperlinkUrl: String? = null
+    var hyperlinkUrl: String? = null,
+    var isInverse: Boolean = false
 ) {
     // Backwards compatibility for single-char properties
     var char: Char
@@ -30,6 +31,7 @@ data class TerminalCell(
         isItalic = false
         isUnderline = false
         hyperlinkUrl = null
+        isInverse = false
     }
 
     fun copyFrom(other: TerminalCell) {
@@ -42,5 +44,6 @@ data class TerminalCell(
         this.isItalic = other.isItalic
         this.isUnderline = other.isUnderline
         this.hyperlinkUrl = other.hyperlinkUrl
+        this.isInverse = other.isInverse
     }
 }

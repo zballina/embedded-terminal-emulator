@@ -217,9 +217,11 @@ class AnsiEscapeParser(
                         1 -> onCommand(TerminalCommand.SetBold(true))
                         3 -> onCommand(TerminalCommand.SetItalic(true))
                         4 -> onCommand(TerminalCommand.SetUnderline(true))
+                        7 -> onCommand(TerminalCommand.SetInverse(true))
                         22 -> onCommand(TerminalCommand.SetBold(false))
                         23 -> onCommand(TerminalCommand.SetItalic(false))
                         24 -> onCommand(TerminalCommand.SetUnderline(false))
+                        27 -> onCommand(TerminalCommand.SetInverse(false))
                         in 30..37 -> onCommand(TerminalCommand.SetFgColor(getAnsiColor(p - 30)))
                         38 -> {
                             if (idx + 1 < params.size) {

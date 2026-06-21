@@ -41,7 +41,7 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         // Action to add new tabs
-        val addTabAction = object : AnAction(TerminalBundle.message("new.tab"), TerminalBundle.message("new.tab.desc"), AllIcons.General.Add) {
+        val addTabAction = object : AnAction(TerminalBundle.message("new.tab"), TerminalBundle.message("new.tab.desc"), AllIcons.General.Add), DumbAware {
             override fun actionPerformed(e: AnActionEvent) {
                 val nextTabIndex = toolWindow.contentManager.contentCount + 1
                 addNewTerminalTab(project, toolWindow, "Terminal $nextTabIndex")
@@ -53,7 +53,7 @@ class EmbeddedTerminalToolWindowFactory : ToolWindowFactory, DumbAware {
         }
 
         // Action to close active tab
-        val closeTabAction = object : AnAction(TerminalBundle.message("close.tab"), TerminalBundle.message("close.tab.desc"), AllIcons.Actions.Cancel) {
+        val closeTabAction = object : AnAction(TerminalBundle.message("close.tab"), TerminalBundle.message("close.tab.desc"), AllIcons.Actions.Cancel), DumbAware {
             override fun actionPerformed(e: AnActionEvent) {
                 val selectedContent = toolWindow.contentManager.selectedContent
                 if (selectedContent != null) {
@@ -332,263 +332,261 @@ open class EmbeddedTerminalController(private val project: Project, private val 
     }
 
     private fun startPty() {
-        try {
-            val currentSettings = EmbeddedTerminalSettings.getInstance().state
-            val customShell = currentSettings.shellPath
-            val os = System.getProperty("os.name").lowercase()
-            
-            // Unix: force -l (login) and -i (interactive)
-            val cmd = if (customShell.isNotEmpty()) {
-                arrayOf(customShell)
-            } else if (os.contains("win")) {
-                arrayOf("powershell.exe")
-            } else {
-                val shell = if (java.io.File("/bin/zsh").exists()) "/bin/zsh" else "/bin/bash"
-                arrayOf(shell, "-l", "-i")
-            }
+        executor.submit {
+            try {
+                val currentSettings = EmbeddedTerminalSettings.getInstance().state
+                val customShell = currentSettings.shellPath
+                val os = System.getProperty("os.name").lowercase()
+                
+                // Unix: force -l (login) and -i (interactive)
+                val cmd = if (customShell.isNotEmpty()) {
+                    arrayOf(customShell)
+                } else if (os.contains("win")) {
+                    arrayOf("powershell.exe")
+                } else {
+                    val shell = if (java.io.File("/bin/zsh").exists()) "/bin/zsh" else "/bin/bash"
+                    arrayOf(shell, "-l", "-i")
+                }
 
-            val env = HashMap(System.getenv())
-            env["TERM"] = "xterm-256color"
+                val env = HashMap(System.getenv())
+                env["TERM"] = "xterm-256color"
 
-            // Auto-activate python virtual environment if present
-            var detectedVenv: java.io.File? = null
-            var detectedBinDir: java.io.File? = null
-            val isWin = os.contains("win")
+                // Auto-activate python virtual environment if present
+                var detectedVenv: java.io.File? = null
+                var detectedBinDir: java.io.File? = null
+                val isWin = os.contains("win")
 
-            // 1. Try local project venv candidates
-            val baseDir = project.basePath
-            if (baseDir != null) {
-                val venvCandidates = listOf(".venv", "venv", "env")
-                for (cand in venvCandidates) {
-                    val f = java.io.File(baseDir, cand)
-                    if (f.exists() && f.isDirectory) {
-                        val binDir = if (isWin) java.io.File(f, "Scripts") else java.io.File(f, "bin")
-                        if (binDir.exists() && binDir.isDirectory) {
-                            detectedVenv = f
-                            detectedBinDir = binDir
-                            break
+                // 1. Try local project venv candidates
+                val baseDir = project.basePath
+                if (baseDir != null) {
+                    val venvCandidates = listOf(".venv", "venv", "env")
+                    for (cand in venvCandidates) {
+                        val f = java.io.File(baseDir, cand)
+                        if (f.exists() && f.isDirectory) {
+                            val binDir = if (isWin) java.io.File(f, "Scripts") else java.io.File(f, "bin")
+                            if (binDir.exists() && binDir.isDirectory) {
+                                detectedVenv = f
+                                detectedBinDir = binDir
+                                break
+                            }
                         }
                     }
                 }
-            }
 
-            // 2. Try configured Project SDK if local candidates not found
-            if (detectedVenv == null) {
-                try {
-                    val sdk = ProjectRootManager.getInstance(project).projectSdk
-                    val homePath = sdk?.homePath
-                    if (homePath != null) {
-                        val exeFile = java.io.File(homePath)
-                        if (exeFile.exists()) {
-                            val binDir = exeFile.parentFile
-                            if (binDir != null && binDir.exists() && binDir.isDirectory) {
-                                val activateFile = if (isWin) java.io.File(binDir, "activate.bat") else java.io.File(binDir, "activate")
-                                val venvDir = binDir.parentFile
-                                val pyvenvCfg = if (venvDir != null) java.io.File(venvDir, "pyvenv.cfg") else null
-                                if (activateFile.exists() || (pyvenvCfg != null && pyvenvCfg.exists())) {
-                                    detectedVenv = venvDir
-                                    detectedBinDir = binDir
+                // 2. Try configured Project SDK if local candidates not found
+                if (detectedVenv == null) {
+                    try {
+                        val sdk = ProjectRootManager.getInstance(project).projectSdk
+                        val homePath = sdk?.homePath
+                        if (homePath != null) {
+                            val exeFile = java.io.File(homePath)
+                            if (exeFile.exists()) {
+                                val binDir = exeFile.parentFile
+                                if (binDir != null && binDir.exists() && binDir.isDirectory) {
+                                    val activateFile = if (isWin) java.io.File(binDir, "activate.bat") else java.io.File(binDir, "activate")
+                                    val venvDir = binDir.parentFile
+                                    val pyvenvCfg = if (venvDir != null) java.io.File(venvDir, "pyvenv.cfg") else null
+                                    if (activateFile.exists() || (pyvenvCfg != null && pyvenvCfg.exists())) {
+                                        detectedVenv = venvDir
+                                        detectedBinDir = binDir
+                                    }
                                 }
                             }
                         }
+                    } catch (e: Throwable) {
+                        // Ignore class loading or other SDK access errors
                     }
-                } catch (e: Throwable) {
-                    // Ignore class loading or other SDK access errors
                 }
-            }
 
-            if (detectedVenv != null && detectedBinDir != null) {
-                val venvPath = detectedVenv.absolutePath
-                val binPath = detectedBinDir.absolutePath
-                val oldPath = env["PATH"] ?: System.getenv("PATH") ?: ""
-                val pathSeparator = if (isWin) ";" else ":"
-                env["PATH"] = if (oldPath.isNotEmpty()) "$binPath$pathSeparator$oldPath" else binPath
-                env["VIRTUAL_ENV"] = venvPath
-                env.remove("PYTHONHOME")
-            }
-
-            var activatedSilently = false
-            var finalCmd = cmd
-            val shellPath = cmd.firstOrNull() ?: ""
-            val shellLower = shellPath.lowercase()
-            
-            if (isWin) {
                 if (detectedVenv != null && detectedBinDir != null) {
-                    if (shellLower.contains("powershell") || shellLower.contains("pwsh")) {
-                        val psScript = java.io.File(detectedBinDir, "Activate.ps1")
-                        if (psScript.exists()) {
-                            finalCmd = arrayOf(shellPath, "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "& \"${psScript.absolutePath}\"")
-                            activatedSilently = true
+                    val venvPath = detectedVenv.absolutePath
+                    val binPath = detectedBinDir.absolutePath
+                    val oldPath = env["PATH"] ?: System.getenv("PATH") ?: ""
+                    val pathSeparator = if (isWin) ";" else ":"
+                    env["PATH"] = if (oldPath.isNotEmpty()) "$binPath$pathSeparator$oldPath" else binPath
+                    env["VIRTUAL_ENV"] = venvPath
+                    env.remove("PYTHONHOME")
+                }
+
+                var activatedSilently = false
+                var finalCmd = cmd
+                val shellPath = cmd.firstOrNull() ?: ""
+                val shellLower = shellPath.lowercase()
+                
+                if (isWin) {
+                    if (detectedVenv != null && detectedBinDir != null) {
+                        if (shellLower.contains("powershell") || shellLower.contains("pwsh")) {
+                            val psScript = java.io.File(detectedBinDir, "Activate.ps1")
+                            if (psScript.exists()) {
+                                finalCmd = arrayOf(shellPath, "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "& \"${psScript.absolutePath}\"")
+                                activatedSilently = true
+                            }
+                        } else if (shellLower.contains("cmd")) {
+                            val batScript = java.io.File(detectedBinDir, "activate.bat")
+                            if (batScript.exists()) {
+                                finalCmd = arrayOf(shellPath, "/K", batScript.absolutePath)
+                                activatedSilently = true
+                            }
                         }
-                    } else if (shellLower.contains("cmd")) {
-                        val batScript = java.io.File(detectedBinDir, "activate.bat")
-                        if (batScript.exists()) {
-                            finalCmd = arrayOf(shellPath, "/K", batScript.absolutePath)
-                            activatedSilently = true
+                    }
+                } else {
+                    // Unix shells
+                    if (detectedVenv != null && detectedBinDir != null) {
+                        if (shellLower.contains("zsh")) {
+                            try {
+                                val tempDir = java.nio.file.Files.createTempDirectory("terminal-zsh-").toFile()
+                                tempFilesToDelete.add(tempDir)
+                                val zshrcFile = java.io.File(tempDir, ".zshrc")
+                                val originalZdotdir = System.getenv("ZDOTDIR") ?: System.getProperty("user.home")
+                                val sb = java.lang.StringBuilder()
+                                sb.append("""
+                                if [ -f "$originalZdotdir/.zshrc" ]; then
+                                    source "$originalZdotdir/.zshrc"
+                                fi
+                                
+                                # Gentoo-style terminal coloring and alias configuration
+                                export CLICOLOR=1
+                                export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                                if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                                    alias ls='ls -G'
+                                else
+                                    alias ls='ls --color=auto'
+                                fi
+                                alias grep='grep --color=auto'
+                                alias diff='diff --color=auto'
+                                PROMPT="%F{green}%n%f@%F{green}%m%f %F{blue}%~%f %# "
+                                """.trimIndent())
+                                
+                                val shScript = java.io.File(detectedBinDir, "activate")
+                                if (shScript.exists()) {
+                                    sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
+                                }
+                                
+                                zshrcFile.writeText(sb.toString())
+                                tempFilesToDelete.add(zshrcFile)
+                                env["ZDOTDIR"] = tempDir.absolutePath
+                                activatedSilently = true
+                            } catch (e: Exception) {
+                                // Fallback
+                            }
+                        } else if (shellLower.contains("bash")) {
+                            try {
+                                val tempFile = java.io.File.createTempFile("terminal-bashrc-", ".sh")
+                                tempFilesToDelete.add(tempFile)
+                                val sb = java.lang.StringBuilder()
+                                sb.append("""
+                                if [ -f ~/.bashrc ]; then
+                                    source ~/.bashrc
+                                fi
+    
+                                # Gentoo-style terminal coloring and alias configuration
+                                export CLICOLOR=1
+                                export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                                if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                                    alias ls='ls -G'
+                                else
+                                    alias ls='ls --color=auto'
+                                fi
+                                alias grep='grep --color=auto'
+                                alias diff='diff --color=auto'
+                                PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "
+                                """.trimIndent())
+                                
+                                val shScript = java.io.File(detectedBinDir, "activate")
+                                if (shScript.exists()) {
+                                    sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
+                                }
+                                
+                                tempFile.writeText(sb.toString())
+                                finalCmd = arrayOf(shellPath, "--rcfile", tempFile.absolutePath, "-i")
+                                activatedSilently = true
+                            } catch (e: Exception) {
+                                // Fallback
+                            }
+                        } else if (shellLower.contains("fish")) {
+                            val fishScript = java.io.File(detectedBinDir, "activate.fish")
+                            if (fishScript.exists()) {
+                                finalCmd = arrayOf(shellPath, "-C", "source \"${fishScript.absolutePath}\"")
+                                activatedSilently = true
+                            }
                         }
                     }
                 }
-            } else {
-                // Unix shells
-                if (shellLower.contains("zsh")) {
-                    try {
-                        val tempDir = java.nio.file.Files.createTempDirectory("terminal-zsh-").toFile()
-                        tempFilesToDelete.add(tempDir)
-                        val zshrcFile = java.io.File(tempDir, ".zshrc")
-                        val originalZdotdir = System.getenv("ZDOTDIR") ?: System.getProperty("user.home")
-                        val sb = java.lang.StringBuilder()
-                        sb.append("""
-                        if [ -f "$originalZdotdir/.zshrc" ]; then
-                            source "$originalZdotdir/.zshrc"
-                        fi
-                        
-                        # Gentoo-style terminal coloring and alias configuration
-                        export CLICOLOR=1
-                        export LSCOLORS="Gxfxcxdxbxegedabagacad"
-                        if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
-                            alias ls='ls -G'
-                        else
-                            alias ls='ls --color=auto'
-                        fi
-                        alias grep='grep --color=auto'
-                        alias diff='diff --color=auto'
-                        PROMPT="%F{green}%n%f@%F{green}%m%f %F{blue}%~%f %# "
-                        """.trimIndent())
-                        
-                        if (detectedBinDir != null) {
-                            val shScript = java.io.File(detectedBinDir, "activate")
-                            if (shScript.exists()) {
-                                sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
-                            }
-                        }
-                        
-                        zshrcFile.writeText(sb.toString())
-                        tempFilesToDelete.add(zshrcFile)
-                        env["ZDOTDIR"] = tempDir.absolutePath
-                        activatedSilently = true
-                    } catch (e: Exception) {
-                        // Fallback
-                    }
-                } else if (shellLower.contains("bash")) {
-                    try {
-                        val tempFile = java.io.File.createTempFile("terminal-bashrc-", ".sh")
-                        tempFilesToDelete.add(tempFile)
-                        val sb = java.lang.StringBuilder()
-                        sb.append("""
-                        if [ -f ~/.bashrc ]; then
-                            source ~/.bashrc
-                        fi
 
-                        # Gentoo-style terminal coloring and alias configuration
-                        export CLICOLOR=1
-                        export LSCOLORS="Gxfxcxdxbxegedabagacad"
-                        if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
-                            alias ls='ls -G'
-                        else
-                            alias ls='ls --color=auto'
-                        fi
-                        alias grep='grep --color=auto'
-                        alias diff='diff --color=auto'
-                        PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "
-                        """.trimIndent())
-                        
-                        if (detectedBinDir != null) {
-                            val shScript = java.io.File(detectedBinDir, "activate")
-                            if (shScript.exists()) {
-                                sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
+                val workingDir = project.basePath ?: System.getProperty("user.home")
+                val pty = PtyProcess.exec(finalCmd, env, workingDir)
+                ptyProcess = pty
+
+                // Send activation command to the shell as fallback if silent activation was not supported
+                if (detectedVenv != null && detectedBinDir != null && !activatedSilently) {
+                    val activeShellPath = finalCmd.firstOrNull() ?: ""
+                    executor.submit {
+                        try {
+                            Thread.sleep(600) // Wait a brief moment for the shell to print its prompt and be ready
+                            val activationCmd = getActivationCommand(detectedBinDir, activeShellPath, os)
+                            if (activationCmd != null) {
+                                writeToPty(activationCmd)
                             }
-                        }
-                        
-                        tempFile.writeText(sb.toString())
-                        finalCmd = arrayOf(shellPath, "--rcfile", tempFile.absolutePath, "-i")
-                        activatedSilently = true
-                    } catch (e: Exception) {
-                        // Fallback
-                    }
-                } else if (shellLower.contains("fish")) {
-                    if (detectedBinDir != null) {
-                        val fishScript = java.io.File(detectedBinDir, "activate.fish")
-                        if (fishScript.exists()) {
-                            finalCmd = arrayOf(shellPath, "-C", "source \"${fishScript.absolutePath}\"")
-                            activatedSilently = true
+                        } catch (e: Exception) {
+                            // Ignore
                         }
                     }
                 }
-            }
-
-            val workingDir = project.basePath ?: System.getProperty("user.home")
-            ptyProcess = PtyProcess.exec(finalCmd, env, workingDir)
-
-            // Send activation command to the shell as fallback if silent activation was not supported
-            if (detectedVenv != null && detectedBinDir != null && !activatedSilently) {
-                val activeShellPath = finalCmd.firstOrNull() ?: ""
-                executor.submit {
-                    try {
-                        Thread.sleep(600) // Wait a brief moment for the shell to print its prompt and be ready
-                        val activationCmd = getActivationCommand(detectedBinDir, activeShellPath, os)
-                        if (activationCmd != null) {
-                            writeToPty(activationCmd)
-                        }
-                    } catch (e: Exception) {
-                        // Ignore
-                    }
+                
+                // Set initial win size target using current buffer dimensions if not set by onResize yet
+                if (targetCols == 80 && targetRows == 24 && (buffer.cols != 80 || buffer.rows != 24)) {
+                    targetCols = buffer.cols
+                    targetRows = buffer.rows
                 }
-            }
-            
-            // Set initial win size target using current buffer dimensions if not set by onResize yet
-            if (targetCols == 80 && targetRows == 24 && (buffer.cols != 80 || buffer.rows != 24)) {
-                targetCols = buffer.cols
-                targetRows = buffer.rows
-            }
-            applyWindowSizeSilently()
-            
-            writer = OutputStreamWriter(ptyProcess!!.outputStream, StandardCharsets.UTF_8)
+                applyWindowSizeSilently()
+                
+                writer = OutputStreamWriter(pty.outputStream, StandardCharsets.UTF_8)
 
-            // PTY reading thread
-            executor.submit {
-                val reader = InputStreamReader(ptyProcess!!.inputStream, StandardCharsets.UTF_8)
-                val bufferChars = CharArray(1024)
-                while (!isDisposed) {
-                    try {
-                        if (lastSetCols != targetCols || lastSetRows != targetRows) {
-                            applyWindowSizeSilently()
-                        }
-                        val read = reader.read(bufferChars)
-                        if (read == -1) break
-                        
-                        val rawOutput = String(bufferChars, 0, read)
-                        val escaped = rawOutput.map { c ->
-                            when (c) {
-                                '\u001b' -> "\\e"
-                                '\n' -> "\\n"
-                                '\r' -> "\\r"
-                                '\t' -> "\\t"
-                                '\b' -> "\\b"
-                                else -> if (c.code < 32 || c.code > 126) "\\u${c.code}" else c.toString()
+                // PTY reading thread
+                Thread({
+                    val reader = InputStreamReader(pty.inputStream, StandardCharsets.UTF_8)
+                    val bufferChars = CharArray(1024)
+                    while (!isDisposed) {
+                        try {
+                            if (lastSetCols != targetCols || lastSetRows != targetRows) {
+                                applyWindowSizeSilently()
                             }
-                        }.joinToString("")
-                        System.err.println("[PTY_OUTPUT] Raw: $escaped")
-                        
-                        val delay = backpressureManager.registerRead(read * 2)
-                        if (delay > 0) {
-                            Thread.sleep(delay)
-                        }
+                            val read = reader.read(bufferChars)
+                            if (read == -1) break
+                            
+                            if (java.lang.Boolean.getBoolean("terminal.debug.logging")) {
+                                val rawOutput = String(bufferChars, 0, read)
+                                val escaped = rawOutput.map { c ->
+                                    when (c) {
+                                        '\u001b' -> "\\e"
+                                        '\n' -> "\\n"
+                                        '\r' -> "\\r"
+                                        '\t' -> "\\t"
+                                        '\b' -> "\\b"
+                                        else -> if (c.code < 32 || c.code > 126) "\\u${c.code}" else c.toString()
+                                    }
+                                }.joinToString("")
+                                System.err.println("[PTY_OUTPUT] Raw: $escaped")
+                            }
+                            
+                            val delay = backpressureManager.registerRead(read * 2)
+                            if (delay > 0) {
+                                Thread.sleep(delay)
+                            }
 
-                        stateEngine.feedChars(bufferChars, read)
-                        
-                        com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater {
+                            stateEngine.feedChars(bufferChars, read)
                             terminalPanel.requestRepaint()
+                        } catch (e: Exception) {
+                            break
                         }
-                    } catch (e: Exception) {
-                        break
                     }
-                }
-                if (currentSettings.autoCloseOnExit) {
-                    onProcessExit?.invoke()
-                }
+                    if (currentSettings.autoCloseOnExit) {
+                        onProcessExit?.invoke()
+                    }
+                }, "TerminalPtyReader-${sessionId}").apply { isDaemon = true }.start()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
