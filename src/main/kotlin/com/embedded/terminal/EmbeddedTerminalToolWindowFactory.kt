@@ -431,79 +431,83 @@ open class EmbeddedTerminalController(private val project: Project, private val 
                     }
                 } else {
                     // Unix shells
-                    if (detectedVenv != null && detectedBinDir != null) {
-                        if (shellLower.contains("zsh")) {
-                            try {
-                                val tempDir = java.nio.file.Files.createTempDirectory("terminal-zsh-").toFile()
-                                tempFilesToDelete.add(tempDir)
-                                val zshrcFile = java.io.File(tempDir, ".zshrc")
-                                val originalZdotdir = System.getenv("ZDOTDIR") ?: System.getProperty("user.home")
-                                val sb = java.lang.StringBuilder()
-                                sb.append("""
-                                if [ -f "$originalZdotdir/.zshrc" ]; then
-                                    source "$originalZdotdir/.zshrc"
-                                fi
-                                
-                                # Gentoo-style terminal coloring and alias configuration
-                                export CLICOLOR=1
-                                export LSCOLORS="Gxfxcxdxbxegedabagacad"
-                                if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
-                                    alias ls='ls -G'
-                                else
-                                    alias ls='ls --color=auto'
-                                fi
-                                alias grep='grep --color=auto'
-                                alias diff='diff --color=auto'
-                                PROMPT="%F{green}%n%f@%F{green}%m%f %F{blue}%~%f %# "
-                                """.trimIndent())
-                                
+                    if (shellLower.contains("zsh")) {
+                        try {
+                            val tempDir = java.nio.file.Files.createTempDirectory("terminal-zsh-").toFile()
+                            tempFilesToDelete.add(tempDir)
+                            val zshrcFile = java.io.File(tempDir, ".zshrc")
+                            val originalZdotdir = System.getenv("ZDOTDIR") ?: System.getProperty("user.home")
+                            val sb = java.lang.StringBuilder()
+                            sb.append("""
+                            if [ -f "$originalZdotdir/.zshrc" ]; then
+                                source "$originalZdotdir/.zshrc"
+                            fi
+                            
+                            # Gentoo-style terminal coloring and alias configuration
+                            export CLICOLOR=1
+                            export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                            if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                                alias ls='ls -G'
+                            else
+                                alias ls='ls --color=auto'
+                            fi
+                            alias grep='grep --color=auto'
+                            alias diff='diff --color=auto'
+                            PROMPT="%F{green}%n%f@%F{green}%m%f %F{blue}%~%f %# "
+                            """.trimIndent())
+                            
+                            if (detectedBinDir != null) {
                                 val shScript = java.io.File(detectedBinDir, "activate")
                                 if (shScript.exists()) {
                                     sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
                                 }
-                                
-                                zshrcFile.writeText(sb.toString())
-                                tempFilesToDelete.add(zshrcFile)
-                                env["ZDOTDIR"] = tempDir.absolutePath
-                                activatedSilently = true
-                            } catch (e: Exception) {
-                                // Fallback
                             }
-                        } else if (shellLower.contains("bash")) {
-                            try {
-                                val tempFile = java.io.File.createTempFile("terminal-bashrc-", ".sh")
-                                tempFilesToDelete.add(tempFile)
-                                val sb = java.lang.StringBuilder()
-                                sb.append("""
-                                if [ -f ~/.bashrc ]; then
-                                    source ~/.bashrc
-                                fi
-    
-                                # Gentoo-style terminal coloring and alias configuration
-                                export CLICOLOR=1
-                                export LSCOLORS="Gxfxcxdxbxegedabagacad"
-                                if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
-                                    alias ls='ls -G'
-                                else
-                                    alias ls='ls --color=auto'
-                                fi
-                                alias grep='grep --color=auto'
-                                alias diff='diff --color=auto'
-                                PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "
-                                """.trimIndent())
-                                
+                            
+                            zshrcFile.writeText(sb.toString())
+                            tempFilesToDelete.add(zshrcFile)
+                            env["ZDOTDIR"] = tempDir.absolutePath
+                            activatedSilently = true
+                        } catch (e: Exception) {
+                            // Fallback
+                        }
+                    } else if (shellLower.contains("bash")) {
+                        try {
+                            val tempFile = java.io.File.createTempFile("terminal-bashrc-", ".sh")
+                            tempFilesToDelete.add(tempFile)
+                            val sb = java.lang.StringBuilder()
+                            sb.append("""
+                            if [ -f ~/.bashrc ]; then
+                                source ~/.bashrc
+                            fi
+
+                            # Gentoo-style terminal coloring and alias configuration
+                            export CLICOLOR=1
+                            export LSCOLORS="Gxfxcxdxbxegedabagacad"
+                            if [[ "${'$'}OSTYPE" == "darwin"* ]]; then
+                                alias ls='ls -G'
+                            else
+                                alias ls='ls --color=auto'
+                            fi
+                            alias grep='grep --color=auto'
+                            alias diff='diff --color=auto'
+                            PS1="\[\033[01;32m\]\u@\h\[\033[01;34m\] \w \$\[\033[00m\] "
+                            """.trimIndent())
+                            
+                            if (detectedBinDir != null) {
                                 val shScript = java.io.File(detectedBinDir, "activate")
                                 if (shScript.exists()) {
                                     sb.append("\n\nsource \"${shScript.absolutePath}\"\n")
                                 }
-                                
-                                tempFile.writeText(sb.toString())
-                                finalCmd = arrayOf(shellPath, "--rcfile", tempFile.absolutePath, "-i")
-                                activatedSilently = true
-                            } catch (e: Exception) {
-                                // Fallback
                             }
-                        } else if (shellLower.contains("fish")) {
+                            
+                            tempFile.writeText(sb.toString())
+                            finalCmd = arrayOf(shellPath, "--rcfile", tempFile.absolutePath, "-i")
+                            activatedSilently = true
+                        } catch (e: Exception) {
+                            // Fallback
+                        }
+                    } else if (shellLower.contains("fish")) {
+                        if (detectedBinDir != null) {
                             val fishScript = java.io.File(detectedBinDir, "activate.fish")
                             if (fishScript.exists()) {
                                 finalCmd = arrayOf(shellPath, "-C", "source \"${fishScript.absolutePath}\"")
