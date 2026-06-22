@@ -22,6 +22,11 @@
     ]]></description>
  
      <change-notes><![CDATA[
+    <h4>What's new in version 1.32.0:</h4>
+    <ul>
+        <li><b>Gentoo-Style Terminal Colors &amp; Aliases Loading Fix:</b> Fixed an issue where classic Gentoo-style terminal colors, LSColors, and command aliases (like ls, grep, diff) were not loaded in Unix shell sessions (zsh, bash) when no Python virtual environment was detected or configured in the project workspace.</li>
+    </ul>
+
     <h4>What's new in version 1.30.0:</h4>
     <ul>
         <li><b>Snappy Reactive Repaint & Low-Latency Rendering:</b> Redesigned the terminal repaint scheduler to be fully event-driven, triggering repaints instantly on EDT for typing/idle periods and rate-limiting to 60 FPS under heavy output. Removed background polling thread and extra EDT scheduling hops to make typing extremely snappy.</li>
