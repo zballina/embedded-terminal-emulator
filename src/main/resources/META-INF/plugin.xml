@@ -15,6 +15,7 @@
         <li><b>Guaranteed Automatic Virtual Environment Activation:</b> Instant detection of Python environments (`.venv`, `venv`, `env`) linked to the project and injection into the PTY process's `PATH` when opening a tab. Avoids the usual problems and misconfigurations of the official terminal to activate environments transparently.</li>
         <li><b>Full Shell Keyboard Shortcut Control (Ctrl+R, Ctrl+C, etc.):</b> Priority event interception that prevents the IDE from capturing critical shell shortcuts (such as history search with `Ctrl+R`, suspensions with `Ctrl+Z`, interrupts with `Ctrl+C`, or word navigation with `Opt/Ctrl + Arrows`), while maintaining accessibility of global ToolWindow shortcuts (`Cmd/Alt + 1..9`).</li>
         <li><b>Protected Paste Mode (Bracketed Paste Mode - ANSI 2004):</b> Native support to prevent visual corruption, long line misalignment, and unintended execution of commands when pasting multiline text into the prompt.</li>
+        <li><b>Passive Paste Sanitizer for macOS:</b> Automatically intercepts pasted multi-line commands, strips trailing line continuation backslashes (<code>\</code>) and trailing whitespace, and collapses them into a single-line command dynamically to prevent accidental carriage-return execution and shell parsing errors on macOS.</li>
         <li><b>Customizable Aesthetics:</b> Allows showing or hiding the vertical scrollbar from the plugin settings, adapting to minimalist or traditional interfaces.</li>
         <li><b>Hot Font and Color Sync:</b> Real-time adaptation to code ligatures, console font sizes, and PyCharm theme palettes instantly and without restarting open tabs.</li>
         <li><b>Multiple Tabs and Lazy Loading:</b> Native navigation and PTY resource loading deferred until the terminal tab becomes visible.</li>
@@ -22,6 +23,11 @@
     ]]></description>
  
      <change-notes><![CDATA[
+    <h4>What's new in version 1.34.0:</h4>
+    <ul>
+        <li><b>Transparent Paste Sanitizer for macOS:</b> Added an automatic, passive paste sanitizer that intercepts clipboard pasting (both normal <code>Cmd+V</code> and smart <code>Cmd+Shift+V</code>). It removes trailing backslashes (<code>\</code>) and trailing whitespace from multi-line commands, unifying them into a clean, single-line command dynamically to prevent accidental execution and shell interpretation errors in macOS.</li>
+    </ul>
+
     <h4>What's new in version 1.32.0:</h4>
     <ul>
         <li><b>Gentoo-Style Terminal Colors &amp; Aliases Loading Fix:</b> Fixed an issue where classic Gentoo-style terminal colors, LSColors, and command aliases (like ls, grep, diff) were not loaded in Unix shell sessions (zsh, bash) when no Python virtual environment was detected or configured in the project workspace.</li>
