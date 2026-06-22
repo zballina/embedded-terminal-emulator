@@ -220,6 +220,46 @@ class SmartPasteTest {
         assertEquals(expectedEscaped, receivedInput)
     }
 
+    @Test
+    fun testPasteSanitizerStandard() {
+        val input = "docker run -d \\\n-p 8080:80 \\\nnginx"
+        val expected = "docker run -d -p 8080:80 nginx"
+        val actual = TerminalPasteSanitizer.sanitize(input, forceMac = true)
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun testPasteSanitizerTrailingSpaces() {
+        val input = "aws s3 cp file.txt s3://my-bucket/ \\   \n--region us-west-2"
+        val expected = "aws s3 cp file.txt s3://my-bucket/ --region us-west-2"
+        val actual = TerminalPasteSanitizer.sanitize(input, forceMac = true)
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun testPasteSanitizerPassthrough() {
+        val input = "git commit -m \"feat: add paste sanitizer\""
+        val expected = "git commit -m \"feat: add paste sanitizer\""
+        val actual = TerminalPasteSanitizer.sanitize(input, forceMac = true)
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun testPasteSanitizerNonMac() {
+        val input = "docker run -d \\\n-p 8080:80 \\\nnginx"
+        // Should keep backslashes if not on Mac
+        val actual = TerminalPasteSanitizer.sanitize(input, forceMac = false)
+        assertEquals(input, actual)
+    }
+
+    @Test
+    fun testPasteSanitizerWindowsLineEndings() {
+        val input = "docker run -d \\\r\n-p 8080:80 \\\r\nnginx"
+        val expected = "docker run -d -p 8080:80 nginx"
+        val actual = TerminalPasteSanitizer.sanitize(input, forceMac = true)
+        assertEquals(expected, actual)
+    }
+
     private class MockTransferable(private val data: Any, private val flavor: DataFlavor) : Transferable {
         override fun getTransferDataFlavors(): Array<DataFlavor> = arrayOf(flavor)
         override fun isDataFlavorSupported(f: DataFlavor): Boolean = f == flavor

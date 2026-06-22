@@ -375,10 +375,11 @@ object SmartPasteController {
         System.err.println("[SMART_PASTE] triggerSmartPasteFlow started. Content type: ${content.javaClass.simpleName}")
         if (content is SmartPasteContent.ShortText) {
             val text = content.text
+            val sanitized = TerminalPasteSanitizer.sanitize(text)
             val processedText = if (panel.buffer.isBracketedPasteMode) {
-                "\u001b[200~$text\u001b[201~"
+                "\u001b[200~$sanitized\u001b[201~"
             } else {
-                text
+                sanitized
             }
             panel.onInput?.invoke(processedText)
             panel.requestRepaint()

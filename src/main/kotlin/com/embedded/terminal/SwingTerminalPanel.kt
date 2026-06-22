@@ -1082,10 +1082,11 @@ class SwingTerminalPanel(
             }
             if (contents.isDataFlavorSupported(DataFlavor.stringFlavor)) {
                 val text = contents.getTransferData(DataFlavor.stringFlavor) as String
+                val sanitized = TerminalPasteSanitizer.sanitize(text)
                 val processedText = if (buffer.isBracketedPasteMode) {
-                    "\u001b[200~$text\u001b[201~"
+                    "\u001b[200~$sanitized\u001b[201~"
                 } else {
-                    text
+                    sanitized
                 }
                 onInput?.invoke(processedText)
                 resetScrollToBottom()
