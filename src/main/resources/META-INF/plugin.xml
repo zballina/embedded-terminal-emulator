@@ -26,6 +26,8 @@
     <h4>What's new in version 1.36.0:</h4>
     <ul>
         <li><b>Terminal Window Resize Scroll Anchor:</b> Fixed scrollbar offset corruption when resizing the terminal window. The scroll position is now anchored to the bottom (or its current relative scroll offset) and temporary Swing layout-induced adjustment events are ignored, preventing the viewport from jumping to the beginning of the terminal history or the active `agy` conversation during resize.</li>
+        <li><b>Ctrl+C Process Interruption Fix (Windows/Linux):</b> Fixed an issue where the copy shortcut (Ctrl+C) on Windows/Linux was unconditionally consumed even when no text was selected, preventing SIGINT (break process) from being sent to the running shell/PTY. Ctrl+C now properly sends the break sequence (`\u0003`) when there is no text selection.</li>
+        <li><b>Non-Blocking Instant Terminal Startup:</b> Optimized the Project SDK virtual environment detection during shell startup. The SDK query now executes asynchronously with a strict 100ms timeout, ensuring that the terminal shell starts up instantly and does not freeze or wait when the IDE is busy with background tasks, indexing, or loading skeletons.</li>
     </ul>
 
     <h4>What's new in version 1.34.0:</h4>

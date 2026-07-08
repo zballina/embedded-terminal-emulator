@@ -385,8 +385,13 @@ open class EmbeddedTerminalController(private val project: Project, private val 
                 // 2. Try configured Project SDK if local candidates not found
                 if (detectedVenv == null) {
                     try {
-                        val sdk = ProjectRootManager.getInstance(project).projectSdk
-                        val homePath = sdk?.homePath
+                        val homePath = java.util.concurrent.CompletableFuture.supplyAsync({
+                            com.intellij.openapi.application.ReadAction.compute<String?, Throwable> {
+                                ProjectRootManager.getInstance(project).projectSdk?.homePath
+                            }
+                        }, com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService())
+                            .get(100, java.util.concurrent.TimeUnit.MILLISECONDS)
+
                         if (homePath != null) {
                             val exeFile = java.io.File(homePath)
                             if (exeFile.exists()) {
