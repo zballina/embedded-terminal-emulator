@@ -42,6 +42,7 @@ class SwingTerminalPanel(
     // Scrollback offset (0 means scrolled all the way to the bottom)
     var scrollOffset = 0
     var scrollBar: javax.swing.JScrollBar? = null
+    var inResize = false
     private var fractionalScroll = 0.0
     private var fractionalReportScroll = 0.0
     @Volatile
@@ -904,12 +905,26 @@ class SwingTerminalPanel(
 
     // Component Resizing Listener
     override fun componentResized(e: ComponentEvent) {
-        recalculateDimensions()
+        inResize = true
+        try {
+            recalculateDimensions()
+        } finally {
+            javax.swing.SwingUtilities.invokeLater {
+                inResize = false
+            }
+        }
     }
 
     override fun componentMoved(e: ComponentEvent) {}
     override fun componentShown(e: ComponentEvent) {
-        recalculateDimensions()
+        inResize = true
+        try {
+            recalculateDimensions()
+        } finally {
+            javax.swing.SwingUtilities.invokeLater {
+                inResize = false
+            }
+        }
     }
     override fun componentHidden(e: ComponentEvent) {}
 
@@ -934,6 +949,7 @@ class SwingTerminalPanel(
         if (newCols != buffer.cols || newRows != buffer.rows) {
             stateEngine.dispatchCommand(TerminalCommand.Resize(newCols, newRows))
             onResize?.invoke(newCols, newRows)
+            updateScrollBar()
             repaint()
         }
     }

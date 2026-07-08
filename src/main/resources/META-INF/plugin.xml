@@ -23,6 +23,11 @@
     ]]></description>
  
      <change-notes><![CDATA[
+    <h4>What's new in version 1.36.0:</h4>
+    <ul>
+        <li><b>Terminal Window Resize Scroll Anchor:</b> Fixed scrollbar offset corruption when resizing the terminal window. The scroll position is now anchored to the bottom (or its current relative scroll offset) and temporary Swing layout-induced adjustment events are ignored, preventing the viewport from jumping to the beginning of the terminal history or the active `agy` conversation during resize.</li>
+    </ul>
+
     <h4>What's new in version 1.34.0:</h4>
     <ul>
         <li><b>Transparent Paste Sanitizer for macOS:</b> Added an automatic, passive paste sanitizer that intercepts clipboard pasting (both normal <code>Cmd+V</code> and smart <code>Cmd+Shift+V</code>). It removes trailing backslashes (<code>\</code>) and trailing whitespace from multi-line commands, unifying them into a clean, single-line command dynamically to prevent accidental execution and shell interpretation errors in macOS.</li>

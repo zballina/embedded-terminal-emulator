@@ -236,6 +236,7 @@ open class EmbeddedTerminalController(private val project: Project, private val 
         // Link scrollbar and terminal panel
         terminalPanel.scrollBar = scrollBar
         scrollBar.addAdjustmentListener { e ->
+            if (terminalPanel.inResize) return@addAdjustmentListener
             val historySize = synchronized(buffer) { buffer.history.size }
             val newOffset = (historySize - e.value).coerceIn(0, historySize)
             if (terminalPanel.scrollOffset != newOffset) {
@@ -245,6 +246,14 @@ open class EmbeddedTerminalController(private val project: Project, private val 
                 terminalPanel.repaint()
             }
         }
+        scrollBar.addComponentListener(object : java.awt.event.ComponentAdapter() {
+            override fun componentResized(e: java.awt.event.ComponentEvent) {
+                terminalPanel.inResize = true
+                javax.swing.SwingUtilities.invokeLater {
+                    terminalPanel.inResize = false
+                }
+            }
+        })
         updateScrollBarVisibility()
 
         // Apply initial opacity/transparency settings to containers
