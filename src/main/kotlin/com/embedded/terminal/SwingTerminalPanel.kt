@@ -629,9 +629,13 @@ class SwingTerminalPanel(
             if (text.isNotEmpty()) {
                 val stringSelection = StringSelection(text)
                 Toolkit.getDefaultToolkit().systemClipboard.setContents(stringSelection, stringSelection)
+                e.consume()
+                return
             }
-            e.consume()
-            return
+            if (isMac) {
+                e.consume()
+                return
+            }
         }
 
         if (modifierDown && code == KeyEvent.VK_V) {
