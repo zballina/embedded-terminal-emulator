@@ -59,28 +59,13 @@ class SwingTerminalPanel(
     private val renderScheduler = RenderScheduler {
         // Read dirty spans atomically, then trigger repaint — lock held only for this tiny window
         val spans: List<DirtySpan>
-        val rows: Int
         synchronized(buffer) {
-            rows = buffer.rows
             spans = buffer.dirtyTracker.getConsolidatedSpans()
             if (spans.isNotEmpty()) buffer.dirtyTracker.clear()
         }
         if (spans.isEmpty()) return@RenderScheduler
         updateScrollBar()
-        if (spans.size > 50) {
-            repaint()
-        } else {
-            for (span in spans) {
-                val viewRow = span.row + scrollOffset
-                if (viewRow in 0 until rows) {
-                    val cellX = padding + span.start * charWidth
-                    val cellY = padding + viewRow * rowHeight
-                    val spanWidth = (span.end - span.start + 1) * charWidth
-                    val spanHeight = rowHeight
-                    repaint(cellX, cellY, spanWidth, spanHeight)
-                }
-            }
-        }
+        repaint()
     }
 
     fun requestRepaint() {
@@ -362,7 +347,7 @@ class SwingTerminalPanel(
         // Draw cursor from snapshot
         if (snapCursorVisible) {
             val snapViewStartLine = if (snapIsAlt) 0 else snapHistorySize - snapScrollOffset
-            val cursorAbsLine = snapCursorY + snapHistorySize
+            val cursorAbsLine = if (snapIsAlt) snapCursorY else snapCursorY + snapHistorySize
             val isCursorInView = cursorAbsLine in snapViewStartLine until (snapViewStartLine + snapRows)
             if (isCursorInView) {
                 val cursorViewY = cursorAbsLine - snapViewStartLine

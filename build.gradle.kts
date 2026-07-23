@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.embedded.terminal"
-version = "1.36.0"
+version = "1.38.0"
 
 
 repositories {

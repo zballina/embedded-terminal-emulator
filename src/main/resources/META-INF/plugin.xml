@@ -23,6 +23,15 @@
     ]]></description>
  
      <change-notes><![CDATA[
+    <h4>What's new in version 1.38.0:</h4>
+    <ul>
+        <li><b>JetBrains 2026.2 Platform Support:</b> Added full compatibility and verification for JetBrains IDEs and PyCharm version 2026.2 (build branch 262).</li>
+        <li><b>Java 25 Toolchain:</b> Upgraded compiler and plugin setups to JVM target 25 to match JetBrains' platform update. Integrated the Foojay Toolchain Resolver to auto-provision JDK 25 during builds.</li>
+        <li><b>Low-Latency Typing &amp; 120 FPS Support:</b> Reduced the render scheduling limit to 8ms (targeting 120 FPS) and simplified repaint coordination to draw the entire viewport in a single pass, making fast typing feel much snappier.</li>
+        <li><b>PTY Backpressure Auto-Reset:</b> Implemented instant backpressure clearance when reading transitions from high-throughput output to typing mode, removing residual input lag.</li>
+        <li><b>Alternate Buffer Cursor Fix:</b> Fixed a bug that hid the terminal cursor in CLI text editors like <code>vi</code> and <code>nano</code> when primary buffer history was present.</li>
+    </ul>
+
     <h4>What's new in version 1.36.0:</h4>
     <ul>
         <li><b>Terminal Window Resize Scroll Anchor:</b> Fixed scrollbar offset corruption when resizing the terminal window. The scroll position is now anchored to the bottom (or its current relative scroll offset) and temporary Swing layout-induced adjustment events are ignored, preventing the viewport from jumping to the beginning of the terminal history or the active `agy` conversation during resize.</li>

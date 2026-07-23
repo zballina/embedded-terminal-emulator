@@ -37,14 +37,14 @@ class RenderScheduler(
             val elapsed = now - lastPaintTime
             
             val sched = scheduler
-            if (elapsed >= 16 || sched == null || sched.isShutdown) {
+            if (elapsed >= 8 || sched == null || sched.isShutdown) {
                 SwingUtilities.invokeLater {
                     isPending = false
                     lastPaintTime = System.currentTimeMillis()
                     repaintTrigger()
                 }
             } else {
-                val delay = 16L - elapsed
+                val delay = 8L - elapsed
                 try {
                     sched.schedule({
                         SwingUtilities.invokeLater {
