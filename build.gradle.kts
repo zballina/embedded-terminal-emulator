@@ -1,7 +1,7 @@
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.24"
-    id("org.jetbrains.intellij.platform") version "2.0.0"
+    id("org.jetbrains.kotlin.jvm") version "2.4.10"
+    id("org.jetbrains.intellij.platform") version "2.18.1"
 }
 
 group = "com.embedded.terminal"
@@ -17,8 +17,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        pycharmCommunity("2024.1")
-        instrumentationTools()
+        pycharm("2026.2")
     }
     implementation("com.ibm.icu:icu4j:74.2")
     testImplementation("junit:junit:4.13.2")
